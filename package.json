@@ -1,0 +1,12 @@
+{
+  "name": "traceerase",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "TraceErase — находит и стирает твой цифровой след",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test.js"
+  },
+  "engines": { "node": ">=18" }
+}

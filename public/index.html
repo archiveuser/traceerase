@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TraceErase — твой цифровой след исчезает за 47 секунд</title>
+<meta name="description" content="TraceErase находит и стирает всё, что о тебе знают в сети: забытые аккаунты, утечки, следы и трекеры.">
+<meta property="og:title" content="Твой цифровой след исчезает за 47 секунд">
+<meta property="og:description" content="TraceErase находит и стирает всё, что о тебе знают в сети.">
+<meta name="theme-color" content="#0a0a0b">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%230a0a0b'/><rect x='3' y='3' width='10' height='3' fill='%23fff'/><rect x='3' y='8' width='6' height='3' fill='%23fff' opacity='.45'/></svg>">
+<link rel="preload" href="/font/monocraft.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/style.css">
+<!-- Прятать секции до появления можно, только если JS точно жив и сможет их показать.
+     Иначе (ошибка модуля, отключённый JS) весь сайт ниже первого экрана — пустота. -->
+<script>document.documentElement.classList.add('js')</script>
+</head>
+<body>
+
+<!-- Фон: пустота → аврора → следы → зерно. Стекло преломляет всё это. -->
+<div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
+<canvas id="trace" aria-hidden="true"></canvas>
+<div class="grain" aria-hidden="true"></div>
+<div class="scan-lines" aria-hidden="true"></div>
+
+<!--
+  Карта смещения для жидкого стекла: искажает фон под панелью, а не саму панель,
+  поэтому текст остаётся резким. Шум СТАТИЧЕН намеренно — <animate> на baseFrequency
+  пересчитывал бы фильтр каждый кадр для каждой из 18 панелей и убивал FPS.
+  Движение даёт аврора, которая плывёт под стеклом.
+-->
+<svg class="defs" aria-hidden="true" focusable="false">
+  <filter id="liquid" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
+    <feTurbulence type="fractalNoise" baseFrequency="0.008 0.014" numOctaves="2" seed="7" result="noise"/>
+    <feGaussianBlur in="noise" stdDeviation="1.4" result="soft"/>
+    <feDisplacementMap in="SourceGraphic" in2="soft" scale="14" xChannelSelector="R" yChannelSelector="G"/>
+  </filter>
+</svg>
+
+<nav id="nav">
+  <div class="wrap">
+    <a class="logo" href="#top">TRACE<b>ERASE</b></a>
+    <div class="links">
+      <a href="#problem">Проблема</a>
+      <a href="#how">Как работает</a>
+      <a href="#result">Результаты</a>
+      <a href="#price">Цены</a>
+      <a class="ghost mag" href="#scan">Сканировать</a>
+    </div>
+  </div>
+</nav>
+
+<header id="top">
+  <div class="wrap">
+    <div class="kicker"><b id="srccount">…</b> источников <i></i> живое сканирование <i></i> 47 секунд</div>
+
+    <h1 class="hw">
+      <span style="--i:0"><i>Твой</i></span>
+      <span style="--i:1"><i class="go">цифровой</i></span>
+      <span style="--i:2"><i class="go">след</i></span><br>
+      <span style="--i:3"><i>исчезает</i></span>
+      <span style="--i:4"><i>за</i></span>
+      <span style="--i:5"><i>47</i></span>
+      <span style="--i:6"><i>секунд</i></span>
+    </h1>
+
+    <p class="lead">TraceErase находит и стирает всё, что о тебе знают в сети: забытые аккаунты, утечки, фото, поддомены и трекеры.</p>
+
+    <form class="scan glass" id="scan" autocomplete="off">
+      <input id="q" name="q" placeholder="никнейм, email или домен" aria-label="Никнейм, email или домен" spellcheck="false" required>
+      <button id="go" class="mag">Начать бесплатное сканирование</button>
+    </form>
+    <p class="note" id="note">Без карты и регистрации. Сканирование настоящее — вводи свои данные.</p>
+    <button class="demo" id="demo" type="button">Посмотреть пример отчёта <span>→</span></button>
+
+    <figure class="signal-board glass" aria-label="Пример карты источников TraceErase">
+      <div class="signal-head"><span>поле следов</span><b id="signal-state"><i></i><span>59 источников</span></b></div>
+      <svg class="signal-map" viewBox="0 0 320 178" aria-hidden="true">
+        <path class="signal-link l1" d="M42 111 112 77 164 111 243 47"/>
+        <path class="signal-link l2" d="M72 40 112 77 188 40 276 100"/>
+        <path class="signal-link l3" d="M42 111 93 142 164 111 225 140"/>
+        <path class="signal-link l4" d="M164 111 188 40"/>
+        <circle class="signal-node n1" cx="42" cy="111" r="4"/>
+        <circle class="signal-node n2" cx="72" cy="40" r="3"/>
+        <circle class="signal-node n3" cx="93" cy="142" r="3"/>
+        <circle class="signal-node n4" cx="112" cy="77" r="5"/>
+        <circle class="signal-node n5" cx="164" cy="111" r="6"/>
+        <circle class="signal-node n6" cx="188" cy="40" r="4"/>
+        <circle class="signal-node n7" cx="225" cy="140" r="3"/>
+        <circle class="signal-node n8" cx="243" cy="47" r="5"/>
+        <circle class="signal-node n9" cx="276" cy="100" r="4"/>
+      </svg>
+      <figcaption><span>профили</span><span>домены</span><span>утечки</span></figcaption>
+    </figure>
+  </div>
+  <div class="scrollhint" aria-hidden="true"><i></i></div>
+</header>
+
+<!-- Строку наполняет app.js из /api/sites — список источников всегда настоящий -->
+<div class="ticker" aria-hidden="true"><div id="tick"></div></div>
+
+<section id="coverage">
+  <div class="wrap rv">
+    <div class="kicker">Покрытие</div>
+    <h2>Следы не живут в одном месте</h2>
+    <p class="sub">Каждый источник проверяется отдельно. Карта ниже показывает, где именно TraceErase ищет публичные следы.</p>
+    <div class="coverage-grid stg" id="coverage-grid" aria-live="polite"></div>
+  </div>
+</section>
+
+<section id="report" hidden>
+  <div class="wrap">
+    <div class="rhead">
+      <div>
+        <div class="kicker">Отчёт</div>
+        <h2 id="rtitle">Сканирую…</h2>
+      </div>
+      <div class="ring" role="img" aria-label="Прогресс сканирования">
+        <svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="44"/><circle cx="50" cy="50" r="44" id="arc"/></svg>
+        <b id="pct">0%</b>
+      </div>
+    </div>
+
+    <div class="counts stg">
+      <div class="glass spot" style="--i:0"><b id="c-found">0</b><small>найдено следов</small></div>
+      <div class="glass spot" style="--i:1"><b id="c-free">0</b><small>чисто</small></div>
+      <div class="glass spot" style="--i:2"><b id="c-unknown">0</b><small>требует проверки</small></div>
+      <div class="glass spot" style="--i:3"><b id="c-time">0.0с</b><small>времени</small></div>
+    </div>
+
+    <div class="filters" id="filters">
+      <button class="chip on" data-f="found">Следы</button>
+      <button class="chip" data-f="all">Всё</button>
+    </div>
+
+    <div class="rows glass" id="rows"></div>
+    <p class="note" id="rnote"></p>
+
+    <div class="rcta glass" id="rcta" hidden>
+      <div>
+        <h3>Найдено <b id="ctan">0</b> следов. Стереть их?</h3>
+        <p>Pro удаляет всё автоматически и следит, чтобы не появилось снова.</p>
+      </div>
+      <a class="btn mag" href="#price">Стереть всё →</a>
+    </div>
+    <div class="report-actions" id="report-actions" hidden>
+      <button class="ghostbtn" id="export-report" type="button">Сохранить отчёт</button>
+    </div>
+    <div class="cleanup glass" id="cleanup" hidden>
+      <div class="cleanup-head"><div><div class="kicker">Маршрут очистки</div><h3>С чего начать</h3></div><div class="visibility"><span>видимость</span><b id="visibility-label">—</b><i><i id="visibility-bar"></i></i></div></div>
+      <ol id="cleanup-list"></ol>
+    </div>
+  </div>
+</section>
+
+<section id="problem">
+  <div class="wrap rv">
+    <div class="kicker">Проблема</div>
+    <h2>О тебе знают больше, чем ты помнишь</h2>
+    <p class="sub">Данные не удаляются сами. Они копируются, продаются и всплывают в самый неподходящий момент.</p>
+    <div class="grid stg">
+      <div class="card glass spot" style="--i:0"><div class="n">87%</div><p>людей имеют забытые аккаунты, к которым давно нет доступа</p></div>
+      <div class="card glass spot" style="--i:1"><div class="n">11 сек</div><p>интервал между утечками персональных данных в мире</p></div>
+      <div class="card glass spot" style="--i:2"><div class="n">7 из 10</div><p>работодателей гуглят кандидата до собеседования</p></div>
+      <div class="card glass spot" style="--i:3"><div class="n">24/7</div><p>брокеры данных, сталкеры и мошенники собирают твой профиль</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="how">
+  <div class="wrap rv">
+    <div class="kicker">Как это работает</div>
+    <h2>Четыре шага до чистого профиля</h2>
+    <p class="sub">Ты вводишь одну строку. Дальше работает движок.</p>
+    <div class="steps glass stg">
+      <div class="step" style="--i:0"><div class="i">01</div><div><h3>Вводишь данные</h3><p>Ник, email или домен — одного хватит, остальное свяжет граф.</p></div></div>
+      <div class="step" style="--i:1"><div class="i">02</div><div><h3>Движок сканирует источники</h3><p>Соцсети, дев-платформы, блоги, Gravatar, DNS, RDAP, CT-логи, базы утечек. Bluesky и Minecraft — через официальные API.</p></div></div>
+      <div class="step" style="--i:2"><div class="i">03</div><div><h3>Показывает полный отчёт</h3><p>Что найдено, где лежит, чем опасно — с прямыми ссылками на каждый след.</p></div></div>
+      <div class="step" style="--i:3"><div class="i">04</div><div><h3>Одним кликом удаляет</h3><p>Готовое GDPR-требование на удаление для каждого сайта. Копируй и отправляй.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<section id="result">
+  <div class="wrap rv">
+    <div class="kicker">Результаты</div>
+    <h2>До и после</h2>
+    <p class="sub">Кейс клиента: три недели автоматической очистки.</p>
+    <div class="eraser glass stg" id="eraser" style="--erase:0%">
+      <div class="eraser-top"><span>было</span><b id="erase-label">потяни, чтобы стереть</b><span>очищено</span></div>
+      <div class="erase-stage">
+      <div class="pane before" style="--i:0">
+        <div class="tag">До · 214 результатов</div>
+        <div class="hit"><b>vk.com/id118***</b>Профиль 2013 года, фото, номер телефона</div>
+        <div class="hit"><b>leak-db.io/breach/2019</b>Email и пароль в открытом дампе</div>
+        <div class="hit"><b>avito.ru/user/***</b>Телефон, город, история объявлений</div>
+        <div class="hit"><b>peoplefinder.***/profile</b>ФИО, возраст, адрес проживания</div>
+        <div class="hit"><b>archive.org/web/2016</b>Старый блог с личными записями</div>
+        <div class="hit"><b>forum.***/member/2291</b>Переписка 2011 года</div>
+      </div>
+      <div class="pane after" style="--i:1">
+        <div class="tag">После · 0 результатов</div>
+        <div class="hit"><b>vk.com/id118***</b>Удалено</div>
+        <div class="hit"><b>leak-db.io/breach/2019</b>Замаскировано</div>
+        <div class="hit"><b>avito.ru/user/***</b>Удалено</div>
+        <div class="hit"><b>peoplefinder.***/profile</b>Удалено</div>
+        <div class="clean">// след очищен</div>
+      </div>
+      <div class="erase-handle" aria-hidden="true"></div>
+      <input class="erase-range" id="erase-range" type="range" min="0" max="100" value="0" aria-label="Показать очистку следов">
+      </div>
+    </div>
+    <div class="stats stg">
+      <div style="--i:0">−214<small>упоминаний</small></div>
+      <div style="--i:1">−18<small>аккаунтов</small></div>
+      <div style="--i:2">−94%<small>трекеров</small></div>
+      <div style="--i:3">47 сек<small>первое сканирование</small></div>
+    </div>
+  </div>
+</section>
+
+<section id="price">
+  <div class="wrap rv">
+    <div class="kicker">Цены</div>
+    <h2>Исчезнуть стоит меньше, чем ужин</h2>
+    <p class="sub">Разовая чистка — это временно. Данные копятся каждый день.</p>
+    <div class="grid pricing stg">
+      <div class="price glass spot" style="--i:0">
+        <h3>Free</h3>
+        <div class="v">0 ₽</div>
+        <ul><li>Одно сканирование</li><li>Полный отчёт со ссылками</li><li>Шаблон GDPR-требования</li><li>Удаление вручную</li></ul>
+        <a class="mag" href="#scan">Сканировать</a>
+      </div>
+      <div class="price glass spot hot" style="--i:1">
+        <div class="ribbon">Выбор 8 из 10</div>
+        <h3>Pro</h3>
+        <div class="v">490 ₽ <small>/ мес</small></div>
+        <ul><li>Еженедельная автоочистка</li><li>Массовые GDPR-запросы за тебя</li><li>Маскировка данных шумом</li><li>Алерты о новых утечках</li><li>Мониторинг всех источников</li></ul>
+        <a class="mag" href="#scan">Подключить Pro</a>
+      </div>
+      <div class="price glass spot" style="--i:2">
+        <h3>Lifetime <span class="badge">осталось 40</span></h3>
+        <div class="v">8 900 ₽ <small>разово</small></div>
+        <ul><li>Всё из Pro — навсегда</li><li>Приоритет в очереди удаления</li><li>Цена не вырастет никогда</li></ul>
+        <a class="mag" href="#scan">Забрать место</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="final">
+  <div class="wrap rv">
+    <h2>Исчезни из интернета,<br>пока тебя не нашли</h2>
+    <a class="btn big mag" href="#scan">Начать бесплатное сканирование</a>
+    <p class="note">47 секунд. Без карты. Без следов.</p>
+  </div>
+</section>
+
+<div class="wrap">
+  <footer>
+    <div>© 2026 TraceErase</div>
+    <div>Сканирование использует только публичные источники. Цифры в блоках «Проблема» и «Результаты» — иллюстративные.</div>
+  </footer>
+</div>
+
+<dialog id="letter" class="glass">
+  <h3>Требование на удаление данных</h3>
+  <p class="note">GDPR ст. 17 / 152-ФЗ ст. 14. Отправь с того адреса, который привязан к аккаунту.</p>
+  <textarea id="ltext" rows="14" spellcheck="false" aria-label="Текст требования"></textarea>
+  <div class="lrow">
+    <button id="lcopy" class="mag">Скопировать</button>
+    <a id="lmail" class="ghostbtn" href="#">Открыть в почте</a>
+    <button id="lclose" class="ghostbtn">Закрыть</button>
+  </div>
+</dialog>
+
+<script src="/app.js" type="module"></script>
+</body>
+</html>
