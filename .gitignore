@@ -1,0 +1,2 @@
+# Local rollback archives should not be deployed with the site.
+backups/*.zip

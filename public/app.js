@@ -1,6 +1,6 @@
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
-const CAT = { dev: 'разработка', soc: 'соцсети', media: 'медиа', work: 'работа', game: 'игры', risk: 'риск', infra: 'инфраструктура' };
+const CAT = { dev: 'разработка', soc: 'соцсети', blog: 'блоги', media: 'медиа', work: 'работа', game: 'игры', link: 'ссылки', risk: 'риск', infra: 'инфраструктура' };
 const ST = { found: 'след найден', free: 'чисто', unknown: 'проверь вручную' };
 const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -73,8 +73,11 @@ const nav = $('#nav');
 addEventListener('scroll', () => nav.classList.toggle('stuck', scrollY > 24), { passive: true });
 
 /* ---------- источники: число и бегущая строка берутся с сервера ---------- */
+let sourceTotal = '60+';
 fetch('/api/sites').then(r => r.json()).then(names => {
+  sourceTotal = names.length;
   $('#srccount').textContent = names.length;
+  if (!$('#q').value.trim()) $('#signal-state span').textContent = `${names.length} источников готово`;
   // Список дублируется дважды: лента едет на -50% и стыкуется сама с собой без шва.
   $('#tick').innerHTML = [...names, ...names].map(n => `<span>${n}</span>`).join('');
 }).catch(() => ($('#srccount').textContent = '60+'));
@@ -157,13 +160,16 @@ const rows = $('#rows'), report = $('#report'), go = $('#go'), q = $('#q');
 let n = { found: 0, free: 0, unknown: 0 }, t0 = 0, timer = 0, es = null, foundHits = [];
 
 /* Карта в первом экране реагирует на цель, но не имитирует запущенное сканирование. */
-const signalBoard = $('.signal-board'), signalState = $('#signal-state span');
+const signalBoard = $('.signal-board'), signalState = $('#signal-state span'), signalQuery = $('#signal-query');
 const updateSignalBoard = () => {
   const value = q.value.trim();
   signalBoard.classList.toggle('is-armed', Boolean(value));
   signalState.textContent = value
-    ? `цель: ${value.slice(0, 18)}${value.length > 18 ? '…' : ''}`
-    : '59 источников';
+    ? 'цель обнаружена'
+    : `${sourceTotal} источников готово`;
+  signalQuery.textContent = value
+    ? `${value.slice(0, 24)}${value.length > 24 ? '…' : ''}`
+    : 'не выбрана';
 };
 q.addEventListener('input', updateSignalBoard);
 
@@ -190,7 +196,7 @@ const addRow = h => {
     <div class="stw"><span class="st ${h.state}">${ST[h.state]}</span></div>`;
   if (h.state === 'found' && h.type === 'account') {
     const b = document.createElement('button');
-    b.className = 'act'; b.textContent = 'Удалить';
+    b.className = 'act'; b.textContent = 'Запрос';
     b.onclick = () => openLetter(h.src, h.url, q.value.trim());
     el.append(b);
   }
@@ -217,7 +223,7 @@ $('#filters').onclick = e => {
   rows.classList.toggle('onlyfound', e.target.dataset.f === 'found');
 };
 
-const stop = () => { es?.close(); es = null; clearInterval(timer); go.disabled = false; go.textContent = 'Сканировать ещё раз'; };
+const stop = () => { es?.close(); es = null; clearInterval(timer); go.disabled = false; go.textContent = 'Проверить ещё раз'; };
 
 $('#scan').onsubmit = e => {
   e.preventDefault();
@@ -266,8 +272,8 @@ $('#scan').onsubmit = e => {
     renderCompletion();
     $('#note').className = 'note';
     $('#note').textContent = n.found
-      ? `Найдено ${n.found} следов. Каждый — это то, что о тебе может узнать любой желающий.`
-      : 'Следов не найдено. Редкий случай — но данные копятся каждый день.';
+      ? `Найдено ${n.found} следов. Теперь у тебя есть карта и понятная точка старта.`
+      : 'В проверенных публичных источниках совпадений не найдено.';
   });
 };
 
@@ -277,7 +283,7 @@ const eraseRange = $('#erase-range');
 eraseRange.oninput = () => {
   const value = Number(eraseRange.value);
   $('#eraser').style.setProperty('--erase', value + '%');
-  $('#erase-label').textContent = value === 0 ? 'потяни, чтобы стереть' : value < 100 ? `очищено ${value}%` : 'след очищен';
+  $('#erase-label').textContent = value === 0 ? 'потяни, чтобы собрать маршрут' : value < 100 ? `маршрут собран на ${value}%` : 'теперь всё перед глазами';
 };
 
 const DEMO_HITS = [
