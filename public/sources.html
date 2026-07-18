@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Источники TraceErase — где мы ищем цифровые следы</title>
+<meta name="description" content="Полный список публичных источников, которые проверяет TraceErase.">
+<meta property="og:title" content="Источники TraceErase">
+<meta property="og:description" content="Где TraceErase ищет цифровые следы.">
+<meta property="og:image" content="/og-traceerase.png">
+<meta name="theme-color" content="#0a0a0b">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body class="sources-page">
+<div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
+<div class="grain" aria-hidden="true"></div>
+<div class="scan-lines" aria-hidden="true"></div>
+
+<nav class="stuck">
+  <div class="wrap">
+    <a class="logo" href="/">TRACE<b>ERASE</b></a>
+    <div class="links"><a href="/">На главную</a><a class="ghost" href="/#scan">Сканировать</a></div>
+  </div>
+</nav>
+
+<main class="sources-main">
+  <div class="wrap">
+    <header class="sources-hero">
+      <div class="kicker">Прозрачность</div>
+      <h1>Где мы ищем<br><span>цифровые следы</span></h1>
+      <p>TraceErase обращается только к публично доступным профилям и техническим источникам. Список обновляется вместе с движком.</p>
+      <div class="sources-total glass"><b id="sources-total">…</b><span>источников в покрытии</span></div>
+    </header>
+
+    <div class="source-filters" id="source-filters" aria-label="Фильтр источников"></div>
+    <div class="source-grid" id="source-grid" aria-live="polite"></div>
+    <p class="sources-note">Если сервис не отвечает или защищён от автоматических запросов, отчёт честно покажет «требует проверки», а не выдаст ложный результат.</p>
+  </div>
+</main>
+<script src="/sources.js" type="module"></script>
+</body>
+</html>

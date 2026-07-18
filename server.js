@@ -115,6 +115,11 @@ const server = createServer(async (req, res) => {
     return;
   }
 
+  if (url.pathname === '/api/sources') {
+    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' }).end(JSON.stringify(sites.map(({ n, cat }) => ({ n, cat }))));
+    return;
+  }
+
   if (url.pathname === '/api/scan') {
     const q = (url.searchParams.get('q') || '').trim().slice(0, 64);
     if (!q) { res.writeHead(400).end('no query'); return; }
@@ -126,7 +131,8 @@ const server = createServer(async (req, res) => {
   }
 
   // статика; resolve + префикс-проверка режет ../ обход
-  const p = resolve(join(PUB, url.pathname === '/' ? 'index.html' : url.pathname));
+  const requested = url.pathname === '/' ? 'index.html' : url.pathname === '/sources' ? 'sources.html' : url.pathname;
+  const p = resolve(join(PUB, requested));
   if (!p.startsWith(PUB + sep) && p !== join(PUB, 'index.html')) { res.writeHead(403).end(); return; }
   try {
     const body = await readFile(p);
