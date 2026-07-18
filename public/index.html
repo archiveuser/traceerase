@@ -14,6 +14,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="/og-traceerase.png">
 <meta name="theme-color" content="#0a0a0b">
+<script>try{document.documentElement.dataset.theme=localStorage.getItem('traceerase-theme')==='light'?'light':'dark';document.documentElement.lang=localStorage.getItem('traceerase-language')==='en'?'en':'ru'}catch{document.documentElement.dataset.theme='dark'}</script>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%230a0a0b'/><rect x='3' y='3' width='10' height='3' fill='%23fff'/><rect x='3' y='8' width='6' height='3' fill='%23fff' opacity='.45'/></svg>">
 <link rel="preload" href="/font/monocraft.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/style.css">
@@ -47,40 +48,48 @@
   <div class="wrap">
     <a class="logo" href="#top">TRACE<b>ERASE</b></a>
     <div class="links">
-      <a href="#value">Зачем</a>
-      <a href="#problem">Сценарии</a>
-      <a href="#how">Как работает</a>
-      <a href="#result">Что получишь</a>
-      <a href="/sources">Источники</a>
-      <a class="ghost mag" href="#scan">Проверить себя</a>
+      <a href="#value" data-i18n="nav.why">Зачем</a>
+      <a href="#problem" data-i18n="nav.scenarios">Сценарии</a>
+      <a href="#how" data-i18n="nav.how">Как работает</a>
+      <a href="#result" data-i18n="nav.result">Что получишь</a>
+      <a href="/sources" data-i18n="nav.sources">Источники</a>
+      <div class="ui-controls" aria-label="Настройки интерфейса" data-i18n-aria-label="control.settings">
+        <button class="ui-control language-control" id="lang-toggle" type="button">
+          <span id="lang-ru">RU</span><i></i><span id="lang-en">EN</span>
+        </button>
+        <button class="ui-control theme-control" id="theme-toggle" type="button" aria-pressed="false">
+          <span class="theme-glyph" aria-hidden="true">◐</span><span id="theme-label">Светлая</span>
+        </button>
+      </div>
+      <a class="ghost mag" href="#scan" data-i18n="nav.scan">Проверить себя</a>
     </div>
   </div>
 </nav>
 
 <header id="top">
   <div class="wrap">
-    <div class="kicker"><b id="srccount">…</b> публичных источников <i></i> один ник <i></i> одна карта</div>
+    <div class="kicker"><b id="srccount">…</b> <span data-i18n="hero.sources">публичных источников</span> <i></i> <span data-i18n="hero.oneName">один ник</span> <i></i> <span data-i18n="hero.oneMap">одна карта</span></div>
 
     <h1 class="hw">
-      <span style="--i:0"><i>Посмотри</i></span>
-      <span style="--i:1"><i>на</i></span>
-      <span style="--i:2"><i>себя</i></span><br>
-      <span style="--i:3"><i>глазами</i></span>
-      <span style="--i:4"><i class="go">интернета</i></span>
+      <span style="--i:0"><i data-i18n="hero.w1">Посмотри</i></span>
+      <span style="--i:1"><i data-i18n="hero.w2">на</i></span>
+      <span style="--i:2"><i data-i18n="hero.w3">себя</i></span><br>
+      <span style="--i:3"><i data-i18n="hero.w4">глазами</i></span>
+      <span style="--i:4"><i class="go" data-i18n="hero.w5">интернета</i></span>
     </h1>
 
-    <p class="lead">TraceErase собирает разбросанные публичные профили в одну карту — чтобы ты увидел свой цифровой след и решил, что оставить, а что закрыть.</p>
+    <p class="lead" data-i18n="hero.lead">TraceErase собирает разбросанные публичные профили в одну карту — чтобы ты увидел свой цифровой след и решил, что оставить, а что закрыть.</p>
 
     <form class="scan glass" id="scan" autocomplete="off">
-      <label class="sr-only" for="q">Никнейм, email или домен</label>
-      <input id="q" name="q" placeholder="введи никнейм, email или домен" aria-label="Никнейм, email или домен" spellcheck="false" required>
-      <button id="go" class="mag">Увидеть свой след</button>
+      <label class="sr-only" for="q" data-i18n="hero.inputLabel">Никнейм, email или домен</label>
+      <input id="q" name="q" placeholder="введи никнейм, email или домен" aria-label="Никнейм, email или домен" data-i18n-placeholder="hero.inputPlaceholder" data-i18n-aria-label="hero.inputLabel" spellcheck="false" required>
+      <button id="go" class="mag" data-i18n="hero.cta">Увидеть свой след</button>
     </form>
-    <p class="note" id="note">Без регистрации. Результаты появляются прямо на этой странице.</p>
-    <button class="demo" id="demo" type="button">Посмотреть пример отчёта <span>→</span></button>
+    <p class="note" id="note" data-i18n="hero.note">Без регистрации. Результаты появляются прямо на этой странице.</p>
+    <button class="demo" id="demo" type="button"><span data-i18n="hero.demo">Посмотреть пример отчёта</span> <span>→</span></button>
 
-    <figure class="signal-board glass" aria-label="Пример карты источников TraceErase">
-      <div class="signal-head"><span>public view / live</span><b id="signal-state"><i></i><span>готов к проверке</span></b></div>
+    <figure class="signal-board glass" aria-label="Пример карты источников TraceErase" data-i18n-aria-label="hero.mapAria">
+      <div class="signal-head"><span data-i18n="hero.mapLive">public view / live</span><b id="signal-state"><i></i><span data-i18n="signal.initial">готов к проверке</span></b></div>
       <svg class="signal-map" viewBox="0 0 320 178" aria-hidden="true">
         <path class="signal-link l1" d="M42 111 112 77 164 111 243 47"/>
         <path class="signal-link l2" d="M72 40 112 77 188 40 276 100"/>
@@ -101,14 +110,14 @@
           <path d="M164 70v12M164 140v12M123 111h12M193 111h12"/>
         </g>
       </svg>
-      <div class="signal-query"><span>цель</span><b id="signal-query">не выбрана</b></div>
-      <figcaption><span>профили</span><span>медиа</span><span>работа</span><span>игры</span></figcaption>
+      <div class="signal-query"><span data-i18n="hero.target">цель</span><b id="signal-query" data-i18n="signal.none">не выбрана</b></div>
+      <figcaption><span data-i18n="hero.profiles">профили</span><span data-i18n="hero.media">медиа</span><span data-i18n="hero.work">работа</span><span data-i18n="hero.games">игры</span></figcaption>
     </figure>
 
-    <div class="hero-outcomes" aria-label="Что даёт TraceErase">
-      <span><b>01</b> найти</span>
-      <span><b>02</b> понять</span>
-      <span><b>03</b> взять под контроль</span>
+    <div class="hero-outcomes" aria-label="Что даёт TraceErase" data-i18n-aria-label="hero.outcomesAria">
+      <span><b>01</b> <i data-i18n="hero.find">найти</i></span>
+      <span><b>02</b> <i data-i18n="hero.understand">понять</i></span>
+      <span><b>03</b> <i data-i18n="hero.control">взять под контроль</i></span>
     </div>
   </div>
   <div class="scrollhint" aria-hidden="true"><i></i></div>
@@ -121,13 +130,13 @@
   <div class="wrap rv">
     <div class="value-layout">
       <div>
-        <div class="kicker">Зачем это нужно</div>
-        <h2>Не искать себя по одному сайту.<br><span>Увидеть целиком.</span></h2>
+        <div class="kicker" data-i18n="value.kicker">Зачем это нужно</div>
+        <h2><span data-i18n="value.title">Не искать себя по одному сайту.</span><br><span data-i18n="value.titleAccent">Увидеть целиком.</span></h2>
       </div>
       <div class="value-list stg">
-        <article style="--i:0"><b>Найти</b><p>Старые профили и публичные страницы, о которых легко забыть.</p></article>
-        <article style="--i:1"><b>Понять</b><p>Какие части твоей онлайн-истории видны постороннему человеку.</p></article>
-        <article style="--i:2"><b>Действовать</b><p>Перейти прямо к источнику и начать с самых заметных следов.</p></article>
+        <article style="--i:0"><b data-i18n="value.find">Найти</b><p data-i18n="value.findText">Старые профили и публичные страницы, о которых легко забыть.</p></article>
+        <article style="--i:1"><b data-i18n="value.understand">Понять</b><p data-i18n="value.understandText">Какие части твоей онлайн-истории видны постороннему человеку.</p></article>
+        <article style="--i:2"><b data-i18n="value.act">Действовать</b><p data-i18n="value.actText">Перейти прямо к источнику и начать с самых заметных следов.</p></article>
       </div>
     </div>
   </div>
@@ -137,25 +146,25 @@
   <div class="wrap">
     <div class="rhead">
       <div>
-        <div class="kicker">Отчёт</div>
-        <h2 id="rtitle">Сканирую…</h2>
+        <div class="kicker" data-i18n="report.kicker">Отчёт</div>
+        <h2 id="rtitle" data-i18n="report.scanning">Сканирую…</h2>
       </div>
-      <div class="ring" role="img" aria-label="Прогресс сканирования">
+      <div class="ring" role="img" aria-label="Прогресс сканирования" data-i18n-aria-label="report.progressAria">
         <svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="44"/><circle cx="50" cy="50" r="44" id="arc"/></svg>
         <b id="pct">0%</b>
       </div>
     </div>
 
     <div class="counts stg">
-      <div class="glass spot" style="--i:0"><b id="c-found">0</b><small>найдено следов</small></div>
-      <div class="glass spot" style="--i:1"><b id="c-free">0</b><small>чисто</small></div>
-      <div class="glass spot" style="--i:2"><b id="c-unknown">0</b><small>требует проверки</small></div>
-      <div class="glass spot" style="--i:3"><b id="c-time">0.0с</b><small>времени</small></div>
+      <div class="glass spot" style="--i:0"><b id="c-found">0</b><small data-i18n="report.found">найдено следов</small></div>
+      <div class="glass spot" style="--i:1"><b id="c-free">0</b><small data-i18n="report.clean">чисто</small></div>
+      <div class="glass spot" style="--i:2"><b id="c-unknown">0</b><small data-i18n="report.unknown">требует проверки</small></div>
+      <div class="glass spot" style="--i:3"><b id="c-time">0.0</b><small data-i18n="report.time">времени</small></div>
     </div>
 
     <div class="filters" id="filters">
-      <button class="chip on" data-f="found">Следы</button>
-      <button class="chip" data-f="all">Всё</button>
+      <button class="chip on" data-f="found" data-i18n="report.traces">Следы</button>
+      <button class="chip" data-f="all" data-i18n="report.all">Всё</button>
     </div>
 
     <div class="rows glass" id="rows"></div>
@@ -163,16 +172,16 @@
 
     <div class="rcta glass" id="rcta" hidden>
       <div>
-        <h3>Найдено <b id="ctan">0</b> следов. Что делать дальше?</h3>
-        <p>Мы собрали найденное в короткий маршрут — начни с самого заметного.</p>
+        <h3><span data-i18n="report.foundLead">Найдено</span> <b id="ctan">0</b> <span data-i18n="report.nextTitle">следов. Что делать дальше?</span></h3>
+        <p data-i18n="report.nextText">Мы собрали найденное в короткий маршрут — начни с самого заметного.</p>
       </div>
-      <a class="btn mag" href="#cleanup">Открыть маршрут →</a>
+      <a class="btn mag" href="#cleanup" data-i18n="report.openRoute">Открыть маршрут →</a>
     </div>
     <div class="report-actions" id="report-actions" hidden>
-      <button class="ghostbtn" id="export-report" type="button">Сохранить отчёт</button>
+      <button class="ghostbtn" id="export-report" type="button" data-i18n="report.save">Сохранить отчёт</button>
     </div>
     <div class="cleanup glass" id="cleanup" hidden>
-      <div class="cleanup-head"><div><div class="kicker">Маршрут очистки</div><h3>С чего начать</h3></div><div class="visibility"><span>видимость</span><b id="visibility-label">—</b><i><i id="visibility-bar"></i></i></div></div>
+      <div class="cleanup-head"><div><div class="kicker" data-i18n="report.route">Маршрут очистки</div><h3 data-i18n="report.start">С чего начать</h3></div><div class="visibility"><span data-i18n="report.visibility">видимость</span><b id="visibility-label">—</b><i><i id="visibility-bar"></i></i></div></div>
       <ol id="cleanup-list"></ol>
     </div>
   </div>
@@ -180,29 +189,29 @@
 
 <section id="problem">
   <div class="wrap rv">
-    <div class="kicker">Когда это важно</div>
-    <h2>Прошлое всплывает<br>без приглашения</h2>
-    <p class="sub">TraceErase полезен в моменты, когда хочется самому определить, какая версия тебя остаётся публичной.</p>
+    <div class="kicker" data-i18n="problem.kicker">Когда это важно</div>
+    <h2><span data-i18n="problem.title">Прошлое всплывает</span><br><span data-i18n="problem.title2">без приглашения</span></h2>
+    <p class="sub" data-i18n="problem.lead">TraceErase полезен в моменты, когда хочется самому определить, какая версия тебя остаётся публичной.</p>
     <div class="moment-grid stg">
       <a class="moment-card glass spot" href="#scan" style="--i:0">
-        <span>новая работа</span><h3>Перед важным знакомством</h3>
-        <p>Посмотри, какой цифровой портрет складывается из старых профилей и публичных страниц.</p>
-        <i>проверить репутационный след →</i>
+        <span data-i18n="moment.workTag">новая работа</span><h3 data-i18n="moment.workTitle">Перед важным знакомством</h3>
+        <p data-i18n="moment.workText">Посмотри, какой цифровой портрет складывается из старых профилей и публичных страниц.</p>
+        <i data-i18n="moment.workAction">проверить репутационный след →</i>
       </a>
       <a class="moment-card glass spot" href="#scan" style="--i:1">
-        <span>публичность</span><h3>Перед запуском проекта</h3>
-        <p>Отдели личную историю от профессиональной до того, как внимание к тебе вырастет.</p>
-        <i>собрать карту профилей →</i>
+        <span data-i18n="moment.publicTag">публичность</span><h3 data-i18n="moment.publicTitle">Перед запуском проекта</h3>
+        <p data-i18n="moment.publicText">Отдели личную историю от профессиональной до того, как внимание к тебе вырастет.</p>
+        <i data-i18n="moment.publicAction">собрать карту профилей →</i>
       </a>
       <a class="moment-card glass spot" href="#scan" style="--i:2">
-        <span>новый этап</span><h3>Когда хочется начать заново</h3>
-        <p>Найди забытые аккаунты и реши, какие из них больше не должны представлять тебя.</p>
-        <i>найти старые аккаунты →</i>
+        <span data-i18n="moment.resetTag">новый этап</span><h3 data-i18n="moment.resetTitle">Когда хочется начать заново</h3>
+        <p data-i18n="moment.resetText">Найди забытые аккаунты и реши, какие из них больше не должны представлять тебя.</p>
+        <i data-i18n="moment.resetAction">найти старые аккаунты →</i>
       </a>
       <a class="moment-card glass spot" href="#scan" style="--i:3">
-        <span>осознанность</span><h3>Просто чтобы знать</h3>
-        <p>Увидь себя глазами незнакомца и верни контроль до того, как он понадобится срочно.</p>
-        <i>проверить видимость →</i>
+        <span data-i18n="moment.awareTag">осознанность</span><h3 data-i18n="moment.awareTitle">Просто чтобы знать</h3>
+        <p data-i18n="moment.awareText">Увидь себя глазами незнакомца и верни контроль до того, как он понадобится срочно.</p>
+        <i data-i18n="moment.awareAction">проверить видимость →</i>
       </a>
     </div>
   </div>
@@ -211,61 +220,61 @@
 <section id="coverage">
   <div class="wrap rv">
     <div class="coverage-intro">
-      <div><div class="kicker">Карта поиска</div><h2>Следы живут в разных частях интернета</h2></div>
-      <p>Каждый источник проверяется отдельно. Счётчики ниже загружаются из реальной базы TraceErase.</p>
+      <div><div class="kicker" data-i18n="coverage.kicker">Карта поиска</div><h2 data-i18n="coverage.title">Следы живут в разных частях интернета</h2></div>
+      <p data-i18n="coverage.lead">Каждый источник проверяется отдельно. Счётчики ниже загружаются из реальной базы TraceErase.</p>
     </div>
     <div class="coverage-grid stg" id="coverage-grid" aria-live="polite"></div>
-    <a class="source-link" href="/sources">Посмотреть все источники <span>↗</span></a>
+    <a class="source-link" href="/sources"><span data-i18n="coverage.all">Посмотреть все источники</span> <span>↗</span></a>
   </div>
 </section>
 
 <section id="how">
   <div class="wrap rv">
-    <div class="kicker">Как это работает</div>
-    <h2>От одной строки<br>к ясной картине</h2>
-    <p class="sub">Три последовательных шага. Никаких таблиц, которые нужно расшифровывать самостоятельно.</p>
+    <div class="kicker" data-i18n="how.kicker">Как это работает</div>
+    <h2><span data-i18n="how.title">От одной строки</span><br><span data-i18n="how.title2">к ясной картине</span></h2>
+    <p class="sub" data-i18n="how.lead">Три последовательных шага. Никаких таблиц, которые нужно расшифровывать самостоятельно.</p>
     <div class="steps glass stg">
-      <div class="step" style="--i:0"><div class="i">01</div><div><h3>Назови отправную точку</h3><p>Введи никнейм, email или домен — то, по чему тебя уже могут искать другие.</p></div><span class="step-state">input</span></div>
-      <div class="step" style="--i:1"><div class="i">02</div><div><h3>TraceErase проверит источники</h3><p>Сканер проходит по публичным профилям и техническим источникам, показывая ход проверки вживую.</p></div><span class="step-state">scan</span></div>
-      <div class="step" style="--i:2"><div class="i">03</div><div><h3>Ты получишь маршрут</h3><p>Найденные страницы, оценку видимости и прямые действия — от проверки профиля до черновика обращения.</p></div><span class="step-state">control</span></div>
+      <div class="step" style="--i:0"><div class="i">01</div><div><h3 data-i18n="how.oneTitle">Назови отправную точку</h3><p data-i18n="how.oneText">Введи никнейм, email или домен — то, по чему тебя уже могут искать другие.</p></div><span class="step-state">input</span></div>
+      <div class="step" style="--i:1"><div class="i">02</div><div><h3 data-i18n="how.twoTitle">TraceErase проверит источники</h3><p data-i18n="how.twoText">Сканер проходит по публичным профилям и техническим источникам, показывая ход проверки вживую.</p></div><span class="step-state">scan</span></div>
+      <div class="step" style="--i:2"><div class="i">03</div><div><h3 data-i18n="how.threeTitle">Ты получишь маршрут</h3><p data-i18n="how.threeText">Найденные страницы, оценку видимости и прямые действия — от проверки профиля до черновика обращения.</p></div><span class="step-state">control</span></div>
     </div>
   </div>
 </section>
 
 <section id="result">
   <div class="wrap rv">
-    <div class="kicker">Что ты получишь</div>
-    <h2>Не обещание исчезнуть.<br>Возможность выбирать.</h2>
-    <p class="sub">Потяни ползунок: TraceErase превращает разрозненные следы в понятный список решений.</p>
+    <div class="kicker" data-i18n="result.kicker">Что ты получишь</div>
+    <h2><span data-i18n="result.title">Не обещание исчезнуть.</span><br><span data-i18n="result.title2">Возможность выбирать.</span></h2>
+    <p class="sub" data-i18n="result.lead">Потяни ползунок: TraceErase превращает разрозненные следы в понятный список решений.</p>
     <div class="eraser glass stg" id="eraser" style="--erase:0%">
-      <div class="eraser-top"><span>разбросано</span><b id="erase-label">потяни, чтобы собрать маршрут</b><span>под контролем</span></div>
+      <div class="eraser-top"><span data-i18n="result.scattered">разбросано</span><b id="erase-label" data-i18n="erase.start">потяни, чтобы собрать маршрут</b><span data-i18n="result.controlled">под контролем</span></div>
       <div class="erase-stage">
       <div class="pane before" style="--i:0">
-        <div class="tag">До · цифровой шум</div>
-        <div class="hit"><b>github.com/old-name</b>публичный профиль</div>
-        <div class="hit"><b>bsky.app/profile/old-name</b>публичный профиль</div>
-        <div class="hit"><b>last.fm/user/old-name</b>история активности</div>
-        <div class="hit"><b>forum.example/member/219</b>старое упоминание</div>
-        <div class="hit"><b>codeforces.com/profile/old-name</b>публичный профиль</div>
-        <div class="hit"><b>archive.example/profile</b>нужно проверить вручную</div>
+        <div class="tag" data-i18n="result.beforeTag">До · цифровой шум</div>
+        <div class="hit"><b>github.com/old-name</b><span data-i18n="result.publicProfile">публичный профиль</span></div>
+        <div class="hit"><b>bsky.app/profile/old-name</b><span data-i18n="result.publicProfile">публичный профиль</span></div>
+        <div class="hit"><b>last.fm/user/old-name</b><span data-i18n="result.activity">история активности</span></div>
+        <div class="hit"><b>forum.example/member/219</b><span data-i18n="result.oldMention">старое упоминание</span></div>
+        <div class="hit"><b>codeforces.com/profile/old-name</b><span data-i18n="result.publicProfile">публичный профиль</span></div>
+        <div class="hit"><b>archive.example/profile</b><span data-i18n="result.manual">нужно проверить вручную</span></div>
       </div>
       <div class="pane after" style="--i:1">
-        <div class="tag">После · маршрут действий</div>
-        <div class="hit"><b>01 · проверить</b>какие данные видны в старом профиле</div>
-        <div class="hit"><b>02 · решить</b>оставить, скрыть или удалить страницу</div>
-        <div class="hit"><b>03 · перейти</b>к найденному источнику напрямую</div>
-        <div class="hit"><b>04 · подготовить</b>черновик обращения об удалении данных</div>
-        <div class="clean">// ты решаешь, что остаётся публичным</div>
+        <div class="tag" data-i18n="result.afterTag">После · маршрут действий</div>
+        <div class="hit"><b data-i18n="result.check">01 · проверить</b><span data-i18n="result.checkText">какие данные видны в старом профиле</span></div>
+        <div class="hit"><b data-i18n="result.decide">02 · решить</b><span data-i18n="result.decideText">оставить, скрыть или удалить страницу</span></div>
+        <div class="hit"><b data-i18n="result.open">03 · перейти</b><span data-i18n="result.openText">к найденному источнику напрямую</span></div>
+        <div class="hit"><b data-i18n="result.prepare">04 · подготовить</b><span data-i18n="result.prepareText">черновик обращения об удалении данных</span></div>
+        <div class="clean" data-i18n="result.choice">// ты решаешь, что остаётся публичным</div>
       </div>
       <div class="erase-handle" aria-hidden="true"></div>
-      <input class="erase-range" id="erase-range" type="range" min="0" max="100" value="0" aria-label="Показать маршрут работы со следами">
+      <input class="erase-range" id="erase-range" type="range" min="0" max="100" value="0" aria-label="Показать маршрут работы со следами" data-i18n-aria-label="result.rangeAria">
       </div>
     </div>
     <div class="stats stg">
-      <div style="--i:0">Карта<small>где тебя нашли</small></div>
-      <div style="--i:1">Оценка<small>насколько профиль заметен</small></div>
-      <div style="--i:2">Ссылки<small>куда перейти прямо сейчас</small></div>
-      <div style="--i:3">Маршрут<small>с чего начать очистку</small></div>
+      <div style="--i:0"><span data-i18n="result.map">Карта</span><small data-i18n="result.mapText">где тебя нашли</small></div>
+      <div style="--i:1"><span data-i18n="result.score">Оценка</span><small data-i18n="result.scoreText">насколько профиль заметен</small></div>
+      <div style="--i:2"><span data-i18n="result.links">Ссылки</span><small data-i18n="result.linksText">куда перейти прямо сейчас</small></div>
+      <div style="--i:3"><span data-i18n="result.route">Маршрут</span><small data-i18n="result.routeText">с чего начать очистку</small></div>
     </div>
   </div>
 </section>
@@ -275,9 +284,9 @@
     <div class="mission-card glass">
       <div class="mission-mark" aria-hidden="true"><span>TE</span><i></i></div>
       <div>
-        <div class="kicker">Идея TraceErase</div>
-        <h2>Приватность начинается<br>не с удаления.<br><span>Сначала нужно увидеть.</span></h2>
-        <p>Мы хотим сделать проверку цифрового следа такой же привычной, как проверку настроек приватности: понятной, доступной и без специальных знаний.</p>
+        <div class="kicker" data-i18n="mission.kicker">Идея TraceErase</div>
+        <h2><span data-i18n="mission.title">Приватность начинается</span><br><span data-i18n="mission.title2">не с удаления.</span><br><span data-i18n="mission.title3">Сначала нужно увидеть.</span></h2>
+        <p data-i18n="mission.text">Мы хотим сделать проверку цифрового следа такой же привычной, как проверку настроек приватности: понятной, доступной и без специальных знаний.</p>
       </div>
     </div>
   </div>
@@ -285,28 +294,28 @@
 
 <section class="final">
   <div class="wrap rv">
-    <div class="kicker">Твой след · твои правила</div>
-    <h2>Узнай, что интернет<br>помнит о тебе</h2>
-    <a class="btn big mag" href="#scan">Проверить себя бесплатно</a>
-    <p class="note">Один ник. Публичные источники. Понятный результат.</p>
+    <div class="kicker" data-i18n="final.kicker">Твой след · твои правила</div>
+    <h2><span data-i18n="final.title">Узнай, что интернет</span><br><span data-i18n="final.title2">помнит о тебе</span></h2>
+    <a class="btn big mag" href="#scan" data-i18n="final.cta">Проверить себя бесплатно</a>
+    <p class="note" data-i18n="final.note">Один ник. Публичные источники. Понятный результат.</p>
   </div>
 </section>
 
 <div class="wrap">
   <footer>
     <div>© 2026 TraceErase</div>
-    <div>Инструмент цифровой осознанности · работает с публично доступными страницами</div>
+    <div data-i18n="footer.text">Инструмент цифровой осознанности · работает с публично доступными страницами</div>
   </footer>
 </div>
 
 <dialog id="letter" class="glass">
-  <h3>Черновик обращения об удалении</h3>
-  <p class="note">Проверь текст и требования конкретного сервиса перед отправкой.</p>
-  <textarea id="ltext" rows="14" spellcheck="false" aria-label="Текст требования"></textarea>
+  <h3 data-i18n="dialog.title">Черновик обращения об удалении</h3>
+  <p class="note" data-i18n="dialog.note">Проверь текст и требования конкретного сервиса перед отправкой.</p>
+  <textarea id="ltext" rows="14" spellcheck="false" aria-label="Текст требования" data-i18n-aria-label="dialog.textAria"></textarea>
   <div class="lrow">
-    <button id="lcopy" class="mag">Скопировать</button>
-    <a id="lmail" class="ghostbtn" href="#">Открыть в почте</a>
-    <button id="lclose" class="ghostbtn">Закрыть</button>
+    <button id="lcopy" class="mag" data-i18n="dialog.copy">Скопировать</button>
+    <a id="lmail" class="ghostbtn" href="#" data-i18n="dialog.mail">Открыть в почте</a>
+    <button id="lclose" class="ghostbtn" data-i18n="dialog.close">Закрыть</button>
   </div>
 </dialog>
 

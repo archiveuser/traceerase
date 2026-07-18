@@ -1,7 +1,11 @@
+import './ui.js';
+
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
-const CAT = { dev: 'разработка', soc: 'соцсети', blog: 'блоги', media: 'медиа', work: 'работа', game: 'игры', link: 'ссылки', risk: 'риск', infra: 'инфраструктура' };
-const ST = { found: 'след найден', free: 'чисто', unknown: 'проверь вручную' };
+const t = (key, vars) => window.TraceUI?.t(key, vars) || key;
+const currentLanguage = () => window.TraceUI?.getLanguage() || 'ru';
+const CAT = new Proxy({}, { get: (_, key) => t(`cat.${String(key)}`) });
+const ST = new Proxy({}, { get: (_, key) => t(`state.${String(key)}`) });
 const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /* ---------- фон: поле следов, которое стирается при скролле ----------
@@ -40,11 +44,12 @@ const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const draw = () => {
     queued = false;
     const s = Math.min(1, scrollY / innerHeight);
+    const traceRGB = getComputedStyle(document.documentElement).getPropertyValue('--trace-rgb').trim() || '255, 255, 255';
     x.clearRect(0, 0, W, H);
     for (const l of lines) {
       const p = Math.max(0, Math.min(1, (s - l.at) / .32));   // 0 — цел, 1 — стёрт
       if (p >= 1) continue;
-      x.fillStyle = 'rgba(255,255,255,.07)';
+      x.fillStyle = `rgba(${traceRGB},.07)`;
       x.fillText(l.t, l.x, l.y);
       if (p > 0) {
         // destination-out именно стирает пиксели. Залить чёрным нельзя:
@@ -55,7 +60,7 @@ const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
         x.fillStyle = '#000';
         x.fillRect(l.x - 2, l.y - 10, l.w * p + 2, 13);
         x.globalCompositeOperation = 'source-over';
-        x.fillStyle = 'rgba(255,255,255,.4)';                 // головка стирателя
+        x.fillStyle = `rgba(${traceRGB},.4)`;                 // головка стирателя
         x.fillRect(l.x - 2 + l.w * p, l.y - 10, 1, 13);
       }
     }
@@ -65,6 +70,7 @@ const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const onScroll = () => { if (!queued) { queued = true; requestAnimationFrame(draw) } };
   addEventListener('scroll', onScroll, { passive: true });
   addEventListener('resize', build);
+  document.addEventListener('traceerase:themechange', build);
   build();
 }
 
@@ -77,17 +83,20 @@ let sourceTotal = '60+';
 fetch('/api/sites').then(r => r.json()).then(names => {
   sourceTotal = names.length;
   $('#srccount').textContent = names.length;
-  if (!$('#q').value.trim()) $('#signal-state span').textContent = `${names.length} источников готово`;
+  if (!$('#q').value.trim()) $('#signal-state span').textContent = t('signal.ready', { count: names.length });
   // Список дублируется дважды: лента едет на -50% и стыкуется сама с собой без шва.
   $('#tick').innerHTML = [...names, ...names].map(n => `<span>${n}</span>`).join('');
 }).catch(() => ($('#srccount').textContent = '60+'));
 
-const COVERAGE = { dev: 'разработка', soc: 'соцсети', blog: 'блоги', media: 'медиа', work: 'работа', game: 'игры', link: 'ссылки' };
-fetch('/api/coverage').then(r => r.json()).then(coverage => {
-  $('#coverage-grid').innerHTML = Object.entries(coverage).map(([key, count], i) =>
-    `<div class="coverage-card" style="--i:${i}"><b>${count}</b><span>${COVERAGE[key] || key}</span></div>`
+let coverageData = null;
+const renderCoverage = () => {
+  if (!coverageData) return;
+  $('#coverage-grid').innerHTML = Object.entries(coverageData).map(([key, count], i) =>
+    `<div class="coverage-card" style="--i:${i}"><b>${count}</b><span>${CAT[key] || key}</span></div>`
   ).join('');
-}).catch(() => { $('#coverage-grid').innerHTML = '<div class="coverage-card"><b>60+</b><span>публичных источников</span></div>'; });
+};
+fetch('/api/coverage').then(r => r.json()).then(coverage => { coverageData = coverage; renderCoverage(); })
+  .catch(() => { $('#coverage-grid').innerHTML = `<div class="coverage-card"><b>60+</b><span>${t('coverage.fallback')}</span></div>`; });
 
 /* ---------- появление секций ---------- */
 const io = new IntersectionObserver((entries, o) => entries.forEach(e => {
@@ -119,6 +128,25 @@ if (!calm && matchMedia('(hover: hover)').matches) {
 /* ---------- GDPR-требование ---------- */
 const letterFor = (src, url, q) => {
   const host = url ? new URL(url).hostname.replace(/^www\./, '') : `${src.toLowerCase()}.com`;
+  if (currentLanguage() === 'en') return `To: privacy@${host} (or support@${host})
+Subject: Personal data removal request — ${q}
+
+Hello,
+
+I am the data subject. Your service displays personal data associated with the identifier “${q}”.${url ? `\nLink: ${url}` : ''}
+
+Under Article 17 of Regulation (EU) 2016/679 (GDPR), the “right to erasure”, I request that you:
+
+1. Delete the account “${q}” and all personal data associated with it.
+2. Delete backup copies containing this data where legally and technically applicable.
+3. Stop sharing this data with third parties.
+4. Confirm the outcome of this request in writing within the applicable time limit.
+
+If you cannot fulfil this request, please explain the reason and the available appeal procedure.
+
+Sincerely,
+${q}
+Date: ${new Date().toLocaleDateString('en-GB')}`;
   return `Кому: privacy@${host} (или support@${host})
 Тема: Требование об удалении персональных данных — ${q}
 
@@ -144,20 +172,22 @@ const dlg = $('#letter');
 $('#lclose').onclick = () => dlg.close();
 $('#lcopy').onclick = async e => {
   await navigator.clipboard.writeText($('#ltext').value);
-  e.target.textContent = 'Скопировано ✓';
-  setTimeout(() => (e.target.textContent = 'Скопировать'), 1600);
+  e.target.textContent = t('letter.copied');
+  setTimeout(() => (e.target.textContent = t('letter.copy')), 1600);
 };
 const openLetter = (src, url, q) => {
   const text = letterFor(src, url, q);
   $('#ltext').value = text;
   const host = url ? new URL(url).hostname.replace(/^www\./, '') : '';
-  $('#lmail').href = `mailto:${host ? 'privacy@' + host : ''}?subject=${encodeURIComponent('Требование об удалении персональных данных')}&body=${encodeURIComponent(text.split('\n').slice(2).join('\n'))}`;
+  const subject = currentLanguage() === 'en' ? 'Personal data removal request' : 'Требование об удалении персональных данных';
+  $('#lmail').href = `mailto:${host ? 'privacy@' + host : ''}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(text.split('\n').slice(2).join('\n'))}`;
   dlg.showModal();
 };
 
 /* ---------- сканирование ---------- */
 const rows = $('#rows'), report = $('#report'), go = $('#go'), q = $('#q');
 let n = { found: 0, free: 0, unknown: 0 }, t0 = 0, timer = 0, es = null, foundHits = [];
+let lastScanMeta = null, reportMode = null, noteState = 'hero', lastErrorMessage = '';
 
 /* Карта в первом экране реагирует на цель, но не имитирует запущенное сканирование. */
 const signalBoard = $('.signal-board'), signalState = $('#signal-state span'), signalQuery = $('#signal-query');
@@ -165,11 +195,11 @@ const updateSignalBoard = () => {
   const value = q.value.trim();
   signalBoard.classList.toggle('is-armed', Boolean(value));
   signalState.textContent = value
-    ? 'цель обнаружена'
-    : `${sourceTotal} источников готово`;
+    ? t('signal.detected')
+    : t('signal.ready', { count: sourceTotal });
   signalQuery.textContent = value
     ? `${value.slice(0, 24)}${value.length > 24 ? '…' : ''}`
-    : 'не выбрана';
+    : t('signal.none');
 };
 q.addEventListener('input', updateSignalBoard);
 
@@ -191,12 +221,12 @@ const addRow = h => {
   el.className = 'row' + (h.state === 'found' ? ' is-found' : '');
   const name = h.url ? `<a href="${h.url}" target="_blank" rel="noopener noreferrer">${h.src}</a>` : h.src;
   el.innerHTML = `
-    <div><div class="src">${name}</div>${h.detail ? `<div class="det">${h.detail}</div>` : ''}</div>
-    <div class="cat">${CAT[h.cat] || ''}</div>
-    <div class="stw"><span class="st ${h.state}">${ST[h.state]}</span></div>`;
+    <div><div class="src">${name}</div>${h.detail ? `<div class="det"${h.detailKey ? ` data-detail-key="${h.detailKey}"` : ''}>${h.detailKey ? t(h.detailKey) : h.detail}</div>` : ''}</div>
+    <div class="cat" data-cat="${h.cat}">${CAT[h.cat] || ''}</div>
+    <div class="stw"><span class="st ${h.state}" data-state="${h.state}">${ST[h.state]}</span></div>`;
   if (h.state === 'found' && h.type === 'account') {
     const b = document.createElement('button');
-    b.className = 'act'; b.textContent = 'Запрос';
+    b.className = 'act'; b.textContent = t('report.request');
     b.onclick = () => openLetter(h.src, h.url, q.value.trim());
     el.append(b);
   }
@@ -210,10 +240,10 @@ const renderCompletion = () => {
   $('#cleanup').hidden = n.found === 0;
   if (!n.found) return;
   const score = Math.min(100, n.found * 13 + n.unknown * 2);
-  $('#visibility-label').textContent = score > 65 ? 'открытый профиль' : score > 30 ? 'заметный профиль' : 'тихий профиль';
+  $('#visibility-label').textContent = score > 65 ? t('report.open') : score > 30 ? t('report.visible') : t('report.quiet');
   $('#visibility-bar').style.width = score + '%';
   $('#cleanup-list').innerHTML = foundHits.slice(0, 3).map((h, i) =>
-    `<li><span><b>${i === 0 ? 'Проверь и удали' : 'Подготовь запрос для'} ${h.src}</b>${h.detail ? ` · ${h.detail}` : ''}</span></li>`
+    `<li><span><b>${i === 0 ? t('report.checkDelete') : t('report.prepare')} ${h.src}</b>${h.detail ? ` · ${h.detailKey ? t(h.detailKey) : h.detail}` : ''}</span></li>`
   ).join('');
 };
 
@@ -223,7 +253,20 @@ $('#filters').onclick = e => {
   rows.classList.toggle('onlyfound', e.target.dataset.f === 'found');
 };
 
-const stop = () => { es?.close(); es = null; clearInterval(timer); go.disabled = false; go.textContent = 'Проверить ещё раз'; };
+const stop = () => { es?.close(); es = null; clearInterval(timer); go.disabled = false; go.textContent = t('scan.again'); };
+
+const renderReportTitle = () => {
+  if (reportMode === 'demo') $('#rtitle').textContent = t('demo.title');
+  else if (lastScanMeta) $('#rtitle').textContent = `${lastScanMeta.q} · ${t(`kind.${lastScanMeta.kind}`)}`;
+};
+
+const renderNote = () => {
+  if (noteState === 'running') $('#note').textContent = t('scan.wait');
+  else if (noteState === 'doneFound') $('#note').textContent = t('scan.doneFound', { count: n.found });
+  else if (noteState === 'doneEmpty') $('#note').textContent = t('scan.doneEmpty');
+  else if (noteState === 'error') $('#note').textContent = lastErrorMessage || t('scan.connection');
+  else if (noteState === 'hero') $('#note').textContent = t('hero.note');
+};
 
 $('#scan').onsubmit = e => {
   e.preventDefault();
@@ -235,24 +278,25 @@ $('#scan').onsubmit = e => {
   $$('.chip').forEach(c => c.classList.toggle('on', c.dataset.f === 'found'));
   n = { found: 0, free: 0, unknown: 0 };
   foundHits = [];
+  reportMode = 'scan'; lastScanMeta = null;
   ['#c-found', '#c-free', '#c-unknown'].forEach(s => ($(s).textContent = '0'));
   $('#ctan').textContent = '0';
   report.hidden = false;
   $('.counts').classList.add('vis');   // плитки выезжают по очереди
   $('#rcta').hidden = true; $('#cleanup').hidden = true; $('#report-actions').hidden = true; $('#rnote').textContent = '';
-  $('#note').className = 'note'; $('#note').textContent = 'Идёт сканирование. Запросы уходят на реальные сайты — это занимает несколько секунд.';
-  go.disabled = true; go.textContent = 'Сканирую…';
+  noteState = 'running'; $('#note').className = 'note'; renderNote();
+  go.disabled = true; go.textContent = t('scan.running');
   $('#arc').style.strokeDashoffset = 276.5; $('#pct').textContent = '0%';
   report.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   t0 = performance.now();
-  timer = setInterval(() => ($('#c-time').textContent = ((performance.now() - t0) / 1000).toFixed(1) + 'с'), 100);
+  timer = setInterval(() => ($('#c-time').textContent = ((performance.now() - t0) / 1000).toFixed(1) + t('time.unit')), 100);
 
-  es = new EventSource('/api/scan?q=' + encodeURIComponent(val));
+  es = new EventSource('/api/scan?q=' + encodeURIComponent(val) + '&lang=' + currentLanguage());
 
   es.addEventListener('start', ev => {
     const d = JSON.parse(ev.data);
-    $('#rtitle').textContent = `${d.q} · ${{ username: 'никнейм', email: 'email', domain: 'домен' }[d.kind]}`;
+    lastScanMeta = d; renderReportTitle();
   });
   es.addEventListener('hit', ev => { const h = JSON.parse(ev.data); n[h.state]++; setCounts(); addRow(h); });
   es.addEventListener('progress', ev => {
@@ -262,18 +306,16 @@ $('#scan').onsubmit = e => {
   });
   es.addEventListener('note', ev => ($('#rnote').textContent = JSON.parse(ev.data).msg));
   es.addEventListener('error', ev => {
-    const msg = ev.data ? JSON.parse(ev.data).msg : 'Соединение потеряно. Попробуй ещё раз.';
-    $('#note').className = 'note err'; $('#note').textContent = msg;
+    const msg = ev.data ? JSON.parse(ev.data).msg : t('scan.connection');
+    noteState = 'error'; lastErrorMessage = msg; $('#note').className = 'note err'; renderNote();
     stop();
   });
   es.addEventListener('done', () => {
     stop();
-    $('#c-time').textContent = ((performance.now() - t0) / 1000).toFixed(1) + 'с';
+    $('#c-time').textContent = ((performance.now() - t0) / 1000).toFixed(1) + t('time.unit');
     renderCompletion();
     $('#note').className = 'note';
-    $('#note').textContent = n.found
-      ? `Найдено ${n.found} следов. Теперь у тебя есть карта и понятная точка старта.`
-      : 'В проверенных публичных источниках совпадений не найдено.';
+    noteState = n.found ? 'doneFound' : 'doneEmpty'; renderNote();
   });
 };
 
@@ -283,23 +325,40 @@ const eraseRange = $('#erase-range');
 eraseRange.oninput = () => {
   const value = Number(eraseRange.value);
   $('#eraser').style.setProperty('--erase', value + '%');
-  $('#erase-label').textContent = value === 0 ? 'потяни, чтобы собрать маршрут' : value < 100 ? `маршрут собран на ${value}%` : 'теперь всё перед глазами';
+  $('#erase-label').textContent = value === 0 ? t('erase.start') : value < 100 ? t('erase.progress', { value }) : t('erase.done');
 };
 
-const DEMO_HITS = [
-  { type: 'account', src: 'GitHub', cat: 'dev', url: 'https://github.com/demo-user', state: 'found', detail: 'публичные репозитории' },
-  { type: 'account', src: 'Telegram', cat: 'soc', url: 'https://t.me/demo_user', state: 'found', detail: 'публичный профиль' },
-  { type: 'leak', src: 'Архивный профиль', cat: 'risk', state: 'found', detail: 'старое упоминание' },
+const demoHits = () => [
+  { type: 'account', src: 'GitHub', cat: 'dev', url: 'https://github.com/demo-user', state: 'found', detail: t('demo.publicRepos'), detailKey: 'demo.publicRepos' },
+  { type: 'account', src: 'Telegram', cat: 'soc', url: 'https://t.me/demo_user', state: 'found', detail: t('demo.publicProfile'), detailKey: 'demo.publicProfile' },
+  { type: 'leak', src: t('demo.archive'), cat: 'risk', state: 'found', detail: t('demo.oldMention'), detailKey: 'demo.oldMention' },
   { type: 'account', src: 'Codeforces', cat: 'game', url: 'https://codeforces.com/profile/demo-user', state: 'free' }
 ];
 $('#demo').onclick = () => {
+  const demoItems = demoHits();
   es?.close(); clearInterval(timer); rows.innerHTML = ''; rows.classList.add('onlyfound'); foundHits = [];
+  reportMode = 'demo'; lastScanMeta = null; noteState = 'hero';
   n = { found: 0, free: 0, unknown: 0 }; setCounts(); report.hidden = false; $('.counts').classList.add('vis');
-  $('#rtitle').textContent = 'demo-user · пример отчёта'; $('#rcta').hidden = true; $('#cleanup').hidden = true; $('#report-actions').hidden = true;
+  renderReportTitle(); $('#rcta').hidden = true; $('#cleanup').hidden = true; $('#report-actions').hidden = true;
   $('#arc').style.strokeDashoffset = 276.5; $('#pct').textContent = '0%'; report.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  DEMO_HITS.forEach((h, i) => setTimeout(() => {
-    n[h.state]++; setCounts(); addRow(h); const progress = (i + 1) / DEMO_HITS.length;
+  demoItems.forEach((h, i) => setTimeout(() => {
+    n[h.state]++; setCounts(); addRow(h); const progress = (i + 1) / demoItems.length;
     $('#arc').style.strokeDashoffset = 276.5 * (1 - progress); $('#pct').textContent = Math.round(progress * 100) + '%';
-    if (i === DEMO_HITS.length - 1) { $('#c-time').textContent = '2.1с'; renderCompletion(); $('#rnote').textContent = 'Демо не отправляет запросы во внешние источники.'; }
+    if (i === demoItems.length - 1) { $('#c-time').textContent = '2.1' + t('time.unit'); renderCompletion(); $('#rnote').textContent = t('demo.note'); }
   }, i * 330));
 };
+
+document.addEventListener('traceerase:languagechange', () => {
+  updateSignalBoard();
+  renderCoverage();
+  renderReportTitle();
+  renderNote();
+  go.textContent = es ? t('scan.running') : report.hidden ? t('hero.cta') : t('scan.again');
+  $$('.row .cat[data-cat]').forEach(element => { element.textContent = CAT[element.dataset.cat]; });
+  $$('.row .st[data-state]').forEach(element => { element.textContent = ST[element.dataset.state]; });
+  $$('.row .act').forEach(element => { element.textContent = t('report.request'); });
+  $$('[data-detail-key]').forEach(element => { element.textContent = t(element.dataset.detailKey); });
+  if (!$('#cleanup').hidden) renderCompletion();
+  if (reportMode === 'demo') $('#rnote').textContent = t('demo.note');
+  eraseRange.oninput();
+});
