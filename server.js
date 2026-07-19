@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { sites, kindOf, checkSite, gravatar, dns, rdap, subdomains, breaches, pool } from './scan.js';
+import { sites, scanSites, manualSites, kindOf, checkSite, gravatar, dns, rdap, subdomains, breaches, pool } from './scan.js';
 
 const PORT = process.env.PORT || 3000;
 const PUB = resolve(fileURLToPath(new URL('./public/', import.meta.url)));
@@ -41,6 +41,22 @@ const SCAN_TEXT = {
   }
 };
 const scanText = (lang, key) => SCAN_TEXT[lang]?.[key] || SCAN_TEXT.ru[key];
+const evidence = (method, reason) => ({ method, reason, checkedAt: new Date().toISOString() });
+
+const SOURCE_STATS = Object.freeze({ total: sites.length, automatic: scanSites.length, manual: manualSites.length });
+const MANUAL_HIGHLIGHTS = ['VK', 'MAX', 'Instagram', 'Odnoklassniki', 'TikTok', 'YouTube', 'X', 'LinkedIn'];
+const manualUrl = (site, user) => {
+  const pattern = site.profile?.includes('{}') ? site.profile : site.home;
+  try {
+    const href = pattern.replace('{}', encodeURIComponent(user));
+    const url = new URL(href);
+    return url.protocol === 'https:' ? url.href : site.home;
+  } catch { return site.home; }
+};
+const manualHighlights = user => MANUAL_HIGHLIGHTS
+  .map(name => manualSites.find(site => site.n === name))
+  .filter(Boolean)
+  .map(site => ({ n: site.n, url: manualUrl(site, user), direct: Boolean(site.profile?.includes('{}')) }));
 
 async function scanStream(q, send, lang = 'ru') {
   const kind = kindOf(q);
@@ -48,59 +64,79 @@ async function scanStream(q, send, lang = 'ru') {
 
   const user = kind === 'email' ? q.split('@')[0] : q;
   const domain = kind === 'email' ? q.split('@')[1] : kind === 'domain' ? q : null;
-  const list = kind === 'domain' ? [] : sites;
-  const total = list.length + (kind === 'email' ? 3 : 0) + (kind === 'domain' ? 4 : 0);
+  // Полный Bluesky-handle может выглядеть как домен (name.example.com), поэтому
+  // для доменного ввода запускаем только этот безопасный account-контракт.
+  const list = kind === 'domain' ? scanSites.filter(site => site.n === 'Bluesky') : scanSites;
+  const hibpEnabled = Boolean(process.env.HIBP_KEY);
+  const total = list.length + (kind === 'email' ? 2 + Number(hibpEnabled) : 0) + (kind === 'domain' ? 4 : 0);
 
-  send('start', { q, kind, total });
+  send('start', {
+    q, kind, total,
+    catalog: SOURCE_STATS,
+    manual: kind === 'domain' ? [] : manualHighlights(user)
+  });
   let done = 0;
   const tick = () => send('progress', { done: ++done, total });
 
   // Сайты идут через пул, чтобы не долбить сотней соединений разом.
   // Результат по-прежнему уходит в браузер сразу, как только пришёл.
   const jobs = [pool(list, 12, async s => {
-    const { state, url } = await checkSite(s, user);
-    send('hit', { type: 'account', src: s.n, cat: s.cat, url, state });
+    const { state, url, method, reason, checkedAt } = await checkSite(s, user);
+    send('hit', { type: 'account', src: s.n, cat: s.cat, url, state, method, reason, checkedAt });
     tick();
   })];
 
   if (kind === 'email') {
-    jobs.push(
+    const emailJobs = [
       gravatar(q).then(g => {
+        const profileFound = g.avatar === true || g.profileState === true;
+        const profileMissing = g.avatar === false && g.profileState === false;
         send('hit', {
           type: 'account', src: 'Gravatar', cat: 'soc', url: `https://gravatar.com/${g.hash}`,
-          state: g.avatar ? 'found' : 'free',
-          detail: g.profile ? [g.profile.displayName, g.profile.currentLocation].filter(Boolean).join(' · ') : null
+          state: profileFound ? 'found' : profileMissing ? 'free' : 'unknown',
+          detail: g.profile ? [g.profile.displayName, g.profile.currentLocation].filter(Boolean).join(' · ') : null,
+          ...evidence('gravatar', profileFound ? 'public-profile-response' : profileMissing ? 'no-public-profile' : 'source-unavailable')
         });
         // Хеш email — это не анонимность: он одинаков на всех сайтах и его легко перебрать.
-        if (g.avatar) send('hit', { type: 'leak', src: scanText(lang, 'hash'), cat: 'risk', url: null, state: 'found', detail: g.hash });
+        if (profileFound) send('hit', { type: 'leak', src: scanText(lang, 'hash'), cat: 'risk', url: null, state: 'found', detail: g.hash, ...evidence('gravatar', 'public-hash') });
         tick();
       }),
       dns(domain, 'MX').then(mx => {
-        send('hit', { type: 'info', src: scanText(lang, 'provider'), cat: 'infra', state: state(mx), detail: mx?.map(m => m.split(' ').pop()).join(', ') || null });
+        send('hit', { type: 'info', src: scanText(lang, 'provider'), cat: 'infra', state: state(mx), detail: mx?.map(m => m.split(' ').pop()).join(', ') || null, ...evidence('dns', mx === null ? 'source-unavailable' : mx.length ? 'records-present' : 'no-records') });
         tick();
-      }),
-      breaches(q).then(b => {
-        if (b === null) send('note', { msg: scanText(lang, 'breachOff') });
-        else if (!b.length) send('hit', { type: 'leak', src: scanText(lang, 'breaches'), cat: 'risk', state: 'free' });
-        else b.forEach(x => send('hit', { type: 'leak', src: x.name, cat: 'risk', state: 'found', detail: `${x.date} · ${x.count.toLocaleString(lang === 'en' ? 'en' : 'ru')} ${scanText(lang, 'records')} · ${x.data.slice(0, 4).join(', ')}` }));
+      })
+    ];
+    if (hibpEnabled) emailJobs.push(
+      breaches(q).then(result => {
+        if (result.status === 'disabled') send('note', { msg: scanText(lang, 'breachOff') });
+        else if (result.status === 'unavailable') {
+          send('hit', { type: 'leak', src: scanText(lang, 'breaches'), cat: 'risk', state: 'unknown', ...evidence('hibp', 'source-unavailable') });
+        } else if (!result.records.length) {
+          send('hit', { type: 'leak', src: scanText(lang, 'breaches'), cat: 'risk', state: 'free', ...evidence('hibp', 'no-breach-response') });
+        } else {
+          result.records.forEach(x => send('hit', { type: 'leak', src: x.name, cat: 'risk', state: 'found', detail: `${x.date} · ${x.count.toLocaleString(lang === 'en' ? 'en' : 'ru')} ${scanText(lang, 'records')} · ${(x.data || []).slice(0, 4).join(', ')}`, ...evidence('hibp', 'breach-record') }));
+        }
         tick();
       })
     );
+    else send('note', { msg: scanText(lang, 'breachOff') });
+    jobs.push(...emailJobs);
   }
 
   if (kind === 'domain') {
     jobs.push(
-      dns(domain, 'A').then(a => { send('hit', { type: 'info', src: scanText(lang, 'aRecords'), cat: 'infra', state: state(a), detail: a?.join(', ') || null }); tick(); }),
-      dns(domain, 'TXT').then(t => { send('hit', { type: 'info', src: scanText(lang, 'txtRecords'), cat: 'infra', state: state(t), detail: t?.join(' | ').slice(0, 300) || null }); tick(); }),
+      dns(domain, 'A').then(a => { send('hit', { type: 'info', src: scanText(lang, 'aRecords'), cat: 'infra', state: state(a), detail: a?.join(', ') || null, ...evidence('dns', a === null ? 'source-unavailable' : a.length ? 'records-present' : 'no-records') }); tick(); }),
+      dns(domain, 'TXT').then(t => { send('hit', { type: 'info', src: scanText(lang, 'txtRecords'), cat: 'infra', state: state(t), detail: t?.join(' | ').slice(0, 300) || null, ...evidence('dns', t === null ? 'source-unavailable' : t.length ? 'records-present' : 'no-records') }); tick(); }),
       rdap(domain).then(w => {
-        send('hit', { type: 'info', src: scanText(lang, 'registration'), cat: 'infra', state: w ? 'found' : 'unknown', detail: w ? `${w.registrar || '—'} · ${scanText(lang, 'created')} ${String(w.created).slice(0, 10)}` : null });
+        send('hit', { type: 'info', src: scanText(lang, 'registration'), cat: 'infra', state: w ? 'found' : 'unknown', detail: w ? `${w.registrar || '—'} · ${scanText(lang, 'created')} ${String(w.created).slice(0, 10)}` : null, ...evidence('rdap', w ? 'registration-record' : 'source-unavailable') });
         tick();
       }),
       subdomains(domain).then(subs => {
         send('hit', {
           type: 'leak', src: scanText(lang, 'subdomains'), cat: 'risk', url: `https://crt.sh/?q=%25.${domain}`,
           state: state(subs),
-          detail: subs?.length ? `${subs.length}: ${subs.slice(0, 8).join(', ')}${subs.length > 8 ? '…' : ''}` : subs === null ? scanText(lang, 'unavailable') : null
+          detail: subs?.length ? `${subs.length}: ${subs.slice(0, 8).join(', ')}${subs.length > 8 ? '…' : ''}` : subs === null ? scanText(lang, 'unavailable') : null,
+          ...evidence('certificate-transparency', subs === null ? 'source-unavailable' : subs.length ? 'records-present' : 'no-records')
         });
         tick();
       })
@@ -118,13 +154,18 @@ const server = createServer(async (req, res) => {
   // Список источников отдаёт сервер, а не разметка: иначе число на лендинге
   // разъезжается с реальностью при первом же изменении sites.json.
   if (url.pathname === '/api/sites') {
-    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' }).end(JSON.stringify(sites.map(s => s.n)));
+    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' }).end(JSON.stringify({
+      ...SOURCE_STATS,
+      names: sites.map(site => site.n)
+    }));
     return;
   }
 
   if (url.pathname === '/api/coverage') {
     const coverage = sites.reduce((out, site) => {
-      out[site.cat] = (out[site.cat] || 0) + 1;
+      out[site.cat] ||= { total: 0, automatic: 0 };
+      out[site.cat].total++;
+      if (site.mode === 'auto') out[site.cat].automatic++;
       return out;
     }, {});
     res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' }).end(JSON.stringify(coverage));
@@ -132,7 +173,10 @@ const server = createServer(async (req, res) => {
   }
 
   if (url.pathname === '/api/sources') {
-    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' }).end(JSON.stringify(sites.map(({ n, cat }) => ({ n, cat }))));
+    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' }).end(JSON.stringify(sites.map(({ id, n, cat, mode, home, profile }) => ({
+      id, n, cat, mode, home, direct: Boolean(profile?.includes('{}')),
+      limitation: n === 'MAX' ? 'no-public-username' : null
+    }))));
     return;
   }
 

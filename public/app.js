@@ -79,24 +79,35 @@ const nav = $('#nav');
 addEventListener('scroll', () => nav.classList.toggle('stuck', scrollY > 24), { passive: true });
 
 /* ---------- источники: число и бегущая строка берутся с сервера ---------- */
-let sourceTotal = '60+';
-fetch('/api/sites').then(r => r.json()).then(names => {
-  sourceTotal = names.length;
-  $('#srccount').textContent = names.length;
-  if (!$('#q').value.trim()) $('#signal-state span').textContent = t('signal.ready', { count: names.length });
-  // Список дублируется дважды: лента едет на -50% и стыкуется сама с собой без шва.
-  $('#tick').innerHTML = [...names, ...names].map(n => `<span>${n}</span>`).join('');
-}).catch(() => ($('#srccount').textContent = '60+'));
+let sourceTotal = '200+';
+let sourceStats = { total: 0, automatic: 0, manual: 0 };
+fetch('/api/sites').then(r => r.json()).then(data => {
+  const names = Array.isArray(data) ? data : data.names;
+  sourceStats = Array.isArray(data)
+    ? { total: names.length, automatic: names.length, manual: 0 }
+    : { total: data.total, automatic: data.automatic, manual: data.manual };
+  sourceTotal = sourceStats.total;
+  $('#srccount').textContent = sourceStats.total;
+  if (!$('#q').value.trim()) $('#signal-state span').textContent = t('signal.ready', { count: sourceStats.total });
+  // Вся база остаётся в каталоге; в декоративной ленте — компактная репрезентативная выборка.
+  // Она дублируется дважды: лента едет на -50% и стыкуется сама с собой без шва.
+  const featured = ['VK', 'MAX', 'Telegram', 'Odnoklassniki', 'Instagram', 'TikTok', 'YouTube', 'X', 'GitHub', 'GitLab', 'Habr', 'LinkedIn', 'HeadHunter', 'Avito', 'Twitch', 'Behance'];
+  const tickerNames = [...featured, ...names.filter(name => !featured.includes(name))].slice(0, 48);
+  $('#tick').innerHTML = [...tickerNames, ...tickerNames].map(name => `<span>${name}</span>`).join('');
+}).catch(() => ($('#srccount').textContent = '200+'));
 
 let coverageData = null;
 const renderCoverage = () => {
   if (!coverageData) return;
-  $('#coverage-grid').innerHTML = Object.entries(coverageData).map(([key, count], i) =>
-    `<div class="coverage-card" style="--i:${i}"><b>${count}</b><span>${CAT[key] || key}</span></div>`
+  $('#coverage-grid').innerHTML = Object.entries(coverageData).map(([key, value], i) => {
+    const count = typeof value === 'number' ? value : value.total;
+    const automatic = typeof value === 'number' ? value : value.automatic;
+    return `<div class="coverage-card" style="--i:${i}"><b>${count}</b><span>${CAT[key] || key}</span><small>${t('coverage.autoCount', { count: automatic })}</small></div>`;
+  }
   ).join('');
 };
 fetch('/api/coverage').then(r => r.json()).then(coverage => { coverageData = coverage; renderCoverage(); })
-  .catch(() => { $('#coverage-grid').innerHTML = `<div class="coverage-card"><b>60+</b><span>${t('coverage.fallback')}</span></div>`; });
+  .catch(() => { $('#coverage-grid').innerHTML = `<div class="coverage-card"><b>200+</b><span>${t('coverage.fallback')}</span></div>`; });
 
 /* ---------- появление секций ---------- */
 const io = new IntersectionObserver((entries, o) => entries.forEach(e => {
@@ -186,10 +197,11 @@ const openLetter = (src, url, q) => {
 
 /* ---------- сканирование ---------- */
 const rows = $('#rows'), report = $('#report'), go = $('#go'), q = $('#q');
-let n = { found: 0, free: 0, unknown: 0 }, t0 = 0, timer = 0, es = null, foundHits = [];
+let n = { found: 0, free: 0, unknown: 0 }, t0 = 0, timer = 0, es = null, foundHits = [], allHits = [];
 let lastScanMeta = null, reportMode = null, noteState = 'hero', lastErrorMessage = '';
 let selectedIntent = 'general', activeIntent = 'general', activeQuery = '', insightsReady = false;
 let completedTasks = new Set(), demoTimers = [], runId = 0;
+let scanStartedAt = null, scanFinishedAt = null;
 
 const INTENT_PRIORITY = {
   general: ['soc', 'risk', 'dev', 'work', 'blog', 'media', 'game', 'link', 'infra'],
@@ -279,12 +291,15 @@ const setCounts = () => {
 };
 
 const addRow = h => {
+  const normalized = { ...h, url: safeHttpUrl(h.url), checkedAt: h.checkedAt || new Date().toISOString() };
+  allHits.push(normalized);
   const el = document.createElement('div');
   el.className = 'row' + (h.state === 'found' ? ' is-found' : '');
+  el.dataset.state = h.state;
   const info = document.createElement('div');
   const src = document.createElement('div');
   src.className = 'src';
-  const url = safeHttpUrl(h.url);
+  const url = normalized.url;
   const source = sourceText(h);
   const sourceNode = url ? document.createElement('a') : document.createElement('span');
   sourceNode.textContent = source;
@@ -310,7 +325,7 @@ const addRow = h => {
     el.append(b);
   }
   // найденные — наверх: жюри видит следы, а не список «чисто»
-  if (h.state === 'found') { foundHits.push(h); rows.prepend(el); } else rows.append(el);
+  if (h.state === 'found') { foundHits.push(normalized); rows.prepend(el); } else rows.append(el);
 };
 
 const rankedFoundHits = () => {
@@ -322,19 +337,26 @@ const rankedFoundHits = () => {
 };
 
 const deriveReportModel = () => {
-  const categories = [...new Set(foundHits.map(hit => hit.cat).filter(Boolean))];
-  const volume = Math.min(n.found, 6) / 6 * 60;
+  const accountHits = foundHits.filter(hit => hit.type === 'account');
+  const accountResults = allHits.filter(hit => hit.type === 'account');
+  const conclusive = accountResults.filter(hit => hit.state === 'found' || hit.state === 'free').length;
+  const unknownAccounts = accountResults.filter(hit => hit.state === 'unknown').length;
+  const insufficient = reportMode === 'scan' && conclusive === 0;
+  const categories = [...new Set(accountHits.map(hit => hit.cat).filter(Boolean))];
+  const volume = Math.min(accountHits.length, 6) / 6 * 60;
   const breadth = Math.min(categories.length, 4) / 4 * 40;
-  const score = Math.round(volume + breadth);
-  const grade = score >= 70 ? 'open' : score >= 35 ? 'visible' : 'quiet';
+  const score = insufficient ? null : Math.round(volume + breadth);
+  const grade = insufficient ? 'insufficient' : score >= 70 ? 'open' : score >= 35 ? 'visible' : 'quiet';
   return {
     intent: activeIntent,
     target: activeQuery,
     maskedTarget: maskTarget(activeQuery, reportMode === 'demo' ? 'username' : lastScanMeta?.kind),
-    score, grade, categories,
-    checked: n.found + n.free + n.unknown,
+    score, grade, categories, conclusive, unknownAccounts, insufficient,
+    attempts: Number(lastScanMeta?.total || allHits.length),
+    checked: Number(lastScanMeta?.total || allHits.length),
+    matches: accountHits.length,
     found: n.found, unknown: n.unknown,
-    hits: rankedFoundHits()
+    hits: rankedFoundHits(), accountHits
   };
 };
 
@@ -344,30 +366,36 @@ const renderDossier = model => {
   const viewer = t(`stranger.role.${model.intent}`);
   $('#dossier-mode').textContent = `VIEW / ${t(`intent.${model.intent}`).toUpperCase()}`;
   $('#dossier-lens').textContent = viewer;
-  $('#stranger-score').textContent = model.score;
+  const scoreText = model.insufficient ? '—' : String(model.score);
+  $('#stranger-score').textContent = scoreText;
+  $('.dossier-score i').hidden = model.insufficient;
   $('#stranger-grade').textContent = t(`report.${model.grade}`);
-  $('.dossier-score').setAttribute('aria-label', t('stranger.scoreAriaValue', { score: model.score, grade: t(`report.${model.grade}`) }));
+  $('.dossier-score').setAttribute('aria-label', model.insufficient
+    ? t('stranger.scoreAriaUnavailable')
+    : t('stranger.scoreAriaValue', { score: model.score, grade: t(`report.${model.grade}`) }));
+  $('#dossier-score-note').textContent = t(model.insufficient ? 'stranger.scoreNoteInsufficient' : 'stranger.scoreNote');
   $('#dossier-target').textContent = model.maskedTarget;
-  $('#dossier-found').textContent = `${model.found}/${model.checked}`;
+  $('#dossier-found').textContent = `${model.matches} · ${model.attempts}`;
   $('#dossier-categories').textContent = model.categories.length;
 
-  const topSource = model.hits[0] ? sourceText(model.hits[0]) : '';
-  const summaryKey = !model.found ? 'empty' : model.score >= 70 ? 'high' : model.score >= 35 ? 'medium' : 'quiet';
+  const topHit = model.hits.find(hit => hit.type === 'account') || model.hits[0];
+  const topSource = topHit ? sourceText(topHit) : '';
+  const summaryKey = model.insufficient ? 'insufficient' : !model.matches ? 'empty' : model.score >= 70 ? 'high' : model.score >= 35 ? 'medium' : 'quiet';
   $('#dossier-summary').textContent = t(`stranger.summary.${summaryKey}`, {
-    viewer, count: model.found, source: topSource
+    viewer, count: model.insufficient ? (model.unknownAccounts || model.attempts) : model.matches, source: topSource
   });
 
   const sourceList = $('#dossier-sources');
   sourceList.replaceChildren();
   const sources = [...new Set(model.hits.map(sourceText))].slice(0, 5);
-  (sources.length ? sources : [t('stranger.noMatches')]).forEach(name => {
+  (sources.length ? sources : [t(model.insufficient ? 'stranger.noConclusion' : 'stranger.noMatches')]).forEach(name => {
     const chip = document.createElement('span'); chip.textContent = name; sourceList.append(chip);
   });
 };
 
 const cleanupTasks = model => {
   const tasks = model.hits.slice(0, 3).map((hit, index) => ({
-    id: `hit-${index}`,
+    id: `hit-${String(sourceText(hit) + safeHttpUrl(hit.url)).toLowerCase().replace(/[^a-z0-9а-яё]+/gi, '-').slice(0, 96)}`,
     title: t(index === 0 ? 'cleanup.firstTitle' : 'cleanup.hitTitle', { source: sourceText(hit) }),
     detail: t(`cleanup.reason.${model.intent}`, { category: CAT[hit.cat] || hit.cat }),
     url: safeHttpUrl(hit.url)
@@ -414,6 +442,26 @@ const renderChecklist = model => {
   renderCleanupProgress();
 };
 
+const renderManualReview = () => {
+  const panel = $('#manual-review');
+  const catalog = lastScanMeta?.catalog?.total ? lastScanMeta.catalog : sourceStats;
+  const count = Number(catalog.manual || 0);
+  const links = Array.isArray(lastScanMeta?.manual) ? lastScanMeta.manual : [];
+  panel.hidden = !count || lastScanMeta?.kind === 'domain';
+  if (panel.hidden) return;
+  $('#manual-count').textContent = count;
+  const wrap = $('#manual-links'); wrap.replaceChildren();
+  links.forEach(item => {
+    const href = safeHttpUrl(item.url);
+    if (!href) return;
+    const link = document.createElement('a');
+    link.className = 'manual-chip'; link.href = href; link.target = '_blank'; link.rel = 'noopener noreferrer';
+    link.textContent = `${item.n} ↗`;
+    link.setAttribute('aria-label', t('manual.open', { source: item.n }));
+    wrap.append(link);
+  });
+};
+
 $('#cleanup-list').addEventListener('change', event => {
   const input = event.target.closest('input[data-task-id]');
   if (!input) return;
@@ -429,10 +477,14 @@ const renderCompletion = () => {
   $('#report-actions').hidden = false;
   $('#cleanup').hidden = model.found === 0;
   renderDossier(model);
-  if (!model.found) { visibleTasks = []; return; }
-  $('#visibility-label').textContent = `${model.score}/100 · ${t(`report.${model.grade}`)}`;
-  $('#visibility-bar').style.width = model.score + '%';
+  renderManualReview();
+  $('#visibility-label').textContent = model.insufficient
+    ? t('report.insufficient')
+    : `${model.score}/100 · ${t(`report.${model.grade}`)}`;
+  $('#visibility-bar').style.width = (model.score ?? 0) + '%';
+  if (!model.found) { visibleTasks = []; return model; }
   renderChecklist(model);
+  return model;
 };
 
 $('#filters').onclick = e => {
@@ -455,12 +507,14 @@ const stop = currentRun => {
 const resetReport = () => {
   rows.replaceChildren(); rows.classList.add('onlyfound'); rows.dataset.empty = t('report.waiting');
   $$('.chip').forEach(chip => chip.classList.toggle('on', chip.dataset.f === 'found'));
-  n = { found: 0, free: 0, unknown: 0 }; foundHits = []; completedTasks.clear(); visibleTasks = [];
+  n = { found: 0, free: 0, unknown: 0 }; foundHits = []; allHits = []; completedTasks.clear(); visibleTasks = [];
+  scanStartedAt = null; scanFinishedAt = null;
   insightsReady = false;
   ['#c-found', '#c-free', '#c-unknown'].forEach(selector => ($(selector).textContent = '0'));
   $('#c-time').textContent = '0.0'; $('#ctan').textContent = '0';
   report.hidden = false; $('.counts').classList.add('vis');
-  $('#rcta').hidden = true; $('#cleanup').hidden = true; $('#stranger-view').hidden = true; $('#report-actions').hidden = true;
+  $('#rcta').hidden = true; $('#cleanup').hidden = true; $('#stranger-view').hidden = true; $('#report-actions').hidden = true; $('#manual-review').hidden = true;
+  $('#manual-links').replaceChildren(); $('#print-meta').replaceChildren();
   $('#rnote').textContent = ''; $('#cleanup-list').replaceChildren();
   $('#cleanup-progress').textContent = '0/0'; $('#cleanup-progress-bar').style.width = '0%';
   $('#arc').style.strokeDashoffset = 276.5; $('#pct').textContent = '0%';
@@ -475,6 +529,7 @@ const renderNote = () => {
   if (noteState === 'running') $('#note').textContent = t('scan.wait');
   else if (noteState === 'doneFound') $('#note').textContent = t(`scan.doneFound.${countForm(n.found)}`, { count: n.found });
   else if (noteState === 'doneEmpty') $('#note').textContent = t('scan.doneEmpty');
+  else if (noteState === 'doneUnknown') $('#note').textContent = t('scan.doneUnknown');
   else if (noteState === 'error') $('#note').textContent = lastErrorMessage || t('scan.connection');
   else if (noteState === 'hero') $('#note').textContent = t('hero.note');
 };
@@ -487,6 +542,7 @@ $('#scan').onsubmit = e => {
   cancelActiveRun(); const currentRun = runId; let finished = false;
   activeIntent = selectedIntent; activeQuery = val;
   reportMode = 'scan'; lastScanMeta = null; resetReport();
+  scanStartedAt = new Date();
   noteState = 'running'; $('#note').className = 'note'; renderNote();
   go.disabled = true; go.textContent = t('scan.running');
   report.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -520,15 +576,128 @@ $('#scan').onsubmit = e => {
   });
   es.addEventListener('done', () => {
     if (currentRun !== runId) return;
-    finished = true; stop(currentRun);
+    finished = true; scanFinishedAt = new Date(); stop(currentRun);
     $('#c-time').textContent = ((performance.now() - t0) / 1000).toFixed(1) + t('time.unit');
-    renderCompletion();
+    const model = renderCompletion();
     $('#note').className = 'note';
-    noteState = n.found ? 'doneFound' : 'doneEmpty'; renderNote();
+    noteState = model.insufficient ? 'doneUnknown' : n.found ? 'doneFound' : 'doneEmpty'; renderNote();
   });
 };
 
-$('#export-report').onclick = () => window.print();
+const oneLine = value => String(value || '').replace(/\s+/g, ' ').trim();
+const localTimestamp = value => value ? new Intl.DateTimeFormat(currentLanguage() === 'en' ? 'en-GB' : 'ru-RU', {
+  dateStyle: 'medium', timeStyle: 'long'
+}).format(value) : '—';
+const fileStamp = (date = new Date()) => {
+  const pad = value => String(value).padStart(2, '0');
+  return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}`;
+};
+const buildExportSnapshot = () => {
+  const model = deriveReportModel();
+  const order = { found: 0, unknown: 1, free: 2 };
+  const results = allHits.map(hit => ({
+    source: sourceText(hit), category: CAT[hit.cat] || hit.cat || '—', state: hit.state,
+    detail: oneLine(detailText(hit)), url: safeHttpUrl(hit.url), method: hit.method || '—',
+    reason: hit.reason || '—', checkedAt: hit.checkedAt || null
+  })).sort((a, b) => (order[a.state] ?? 9) - (order[b.state] ?? 9) || a.source.localeCompare(b.source, currentLanguage()));
+  return {
+    generatedAt: new Date(), startedAt: scanStartedAt, finishedAt: scanFinishedAt,
+    mode: reportMode, language: currentLanguage(), intent: activeIntent,
+    kind: lastScanMeta?.kind || 'username', target: activeQuery, maskedTarget: model.maskedTarget,
+    attempts: model.attempts, emitted: results.length, matches: model.matches, conclusive: model.conclusive,
+    counts: { ...n }, score: model.score, grade: model.grade, insufficient: model.insufficient,
+    categories: model.categories, checklist: {
+      done: visibleTasks.filter(task => completedTasks.has(task.id)).length,
+      total: visibleTasks.length
+    },
+    catalog: lastScanMeta?.catalog?.total ? lastScanMeta.catalog : sourceStats,
+    results
+  };
+};
+const methodLabel = method => t(`export.method.${method}`) === `export.method.${method}` ? method : t(`export.method.${method}`);
+const buildTxt = snapshot => {
+  const duration = snapshot.startedAt && snapshot.finishedAt
+    ? `${((snapshot.finishedAt - snapshot.startedAt) / 1000).toFixed(1)} ${t('time.unit')}` : '—';
+  const visibility = snapshot.insufficient
+    ? t('report.insufficient')
+    : `${snapshot.score}/100 · ${t(`report.${snapshot.grade}`)}`;
+  const lines = [
+    `TRACEERASE — ${t('export.personalTitle')}`,
+    '='.repeat(64),
+    `${t('export.generated')}: ${localTimestamp(snapshot.generatedAt)}`,
+    `${t('export.mode')}: ${t(`export.mode.${snapshot.mode}`)}`,
+    `${t('export.target')}: ${snapshot.target || '—'}`,
+    `${t('export.kind')}: ${t(`kind.${snapshot.kind}`)}`,
+    `${t('export.intent')}: ${t(`intent.${snapshot.intent}`)}`,
+    `${t('export.duration')}: ${duration}`,
+    '',
+    `${t('export.catalog')}: ${snapshot.catalog?.total || '—'} (${t('export.automatic')}: ${snapshot.catalog?.automatic || 0}; ${t('export.manual')}: ${snapshot.catalog?.manual || 0})`,
+    `${t('export.attempts')}: ${snapshot.attempts}`,
+    `${t('export.responses')}: ${snapshot.emitted}`,
+    `${t('export.profileMatches')}: ${snapshot.matches}`,
+    `${t('export.conclusive')}: ${snapshot.conclusive}`,
+    `${t('report.found')}: ${snapshot.counts.found}`,
+    `${t('report.clean')}: ${snapshot.counts.free}`,
+    `${t('report.unknown')}: ${snapshot.counts.unknown}`,
+    `${t('export.visibility')}: ${visibility}`,
+    `${t('cleanup.progress')}: ${snapshot.checklist.done}/${snapshot.checklist.total}`,
+    '',
+    t('export.disclaimerMatch'),
+    t('export.disclaimerMissing'),
+    t('export.disclaimerScore'),
+    t('export.disclaimerIncomplete'),
+    '',
+    t('export.resultsTitle').toUpperCase(),
+    '-'.repeat(64)
+  ];
+  if (!snapshot.results.length) lines.push(t('export.noResults'));
+  snapshot.results.forEach((result, index) => {
+    lines.push(
+      `${String(index + 1).padStart(3, '0')}. ${result.source}`,
+      `   ${t('export.category')}: ${result.category}`,
+      `   ${t('export.status')}: ${t(`export.state.${result.state}`)}`,
+      `   ${t('export.method')}: ${methodLabel(result.method)} (${result.reason})`
+    );
+    if (result.checkedAt) lines.push(`   ${t('export.checkedAt')}: ${localTimestamp(new Date(result.checkedAt))}`);
+    if (result.detail) lines.push(`   ${t('export.detail')}: ${result.detail}`);
+    if (result.url) lines.push(`   URL: ${result.url}`);
+    lines.push('');
+  });
+  return lines.join('\r\n');
+};
+const downloadBlob = (blob, filename) => {
+  const href = URL.createObjectURL(blob);
+  const link = document.createElement('a'); link.href = href; link.download = filename;
+  document.body.append(link); link.click(); link.remove();
+  setTimeout(() => URL.revokeObjectURL(href), 1000);
+};
+$('#download-txt').onclick = () => {
+  if (!insightsReady) return;
+  const txt = buildTxt(buildExportSnapshot());
+  downloadBlob(new Blob(['\uFEFF', txt], { type: 'text/plain;charset=utf-8' }), `traceerase-report-${fileStamp()}.txt`);
+  const button = $('#download-txt'); button.textContent = t('report.downloaded'); button.dataset.downloaded = 'true';
+  setTimeout(() => { button.textContent = t('report.downloadTxt'); delete button.dataset.downloaded; }, 1500);
+};
+const preparePrintMeta = snapshot => {
+  const meta = $('#print-meta'); meta.replaceChildren();
+  const title = document.createElement('b'); title.textContent = t('export.personalTitle');
+  const summary = document.createElement('span');
+  summary.textContent = `${t('export.generated')}: ${localTimestamp(snapshot.generatedAt)} · ${t('export.attempts')}: ${snapshot.attempts} · ${t('export.catalog')}: ${snapshot.catalog?.total || '—'}`;
+  const note = document.createElement('small');
+  note.textContent = `${t('export.pdfScope', { count: snapshot.counts.free })} ${t('export.disclaimerMatch')} ${t('export.disclaimerScore')} ${t('export.disclaimerIncomplete')}`;
+  meta.append(title, summary, note);
+};
+$('#export-report').onclick = () => {
+  if (!insightsReady) return;
+  const snapshot = buildExportSnapshot(); preparePrintMeta(snapshot);
+  const previousTitle = document.title;
+  document.title = `traceerase-report-${fileStamp(snapshot.generatedAt)}`;
+  document.body.classList.add('print-report');
+  addEventListener('afterprint', () => {
+    document.title = previousTitle; document.body.classList.remove('print-report');
+  }, { once: true });
+  window.print();
+};
 
 const fitCanvasText = (ctx, value, maxWidth) => {
   const text = String(value || '');
@@ -537,8 +706,10 @@ const fitCanvasText = (ctx, value, maxWidth) => {
   while (short.length > 1 && ctx.measureText(short + '…').width > maxWidth) short = short.slice(0, -1);
   return short + '…';
 };
-const downloadResultCard = event => {
-  if (!insightsReady) { event.preventDefault(); return; }
+const downloadResultCard = async event => {
+  event.preventDefault();
+  if (!insightsReady) return;
+  try { await document.fonts?.load?.('700 25px Monocraft'); } catch {}
   const model = deriveReportModel();
   const canvas = document.createElement('canvas'); canvas.width = 1200; canvas.height = 630;
   const ctx = canvas.getContext('2d');
@@ -571,15 +742,18 @@ const downloadResultCard = event => {
   ctx.fillText(`${t('card.intent')}: ${t(`intent.${model.intent}`)} · ${t(`stranger.role.${model.intent}`)}`, 64, 248);
 
   ctx.fillStyle = dim; ctx.font = `400 13px ${pixel}`; ctx.fillText(t('card.visibility').toUpperCase(), 866, 151);
-  ctx.fillStyle = fg; ctx.font = `700 92px ${pixel}`; ctx.fillText(String(model.score), 858, 235);
-  const scoreWidth = ctx.measureText(String(model.score)).width;
-  ctx.fillStyle = dim; ctx.font = `400 19px ${pixel}`; ctx.fillText('/100', 866 + scoreWidth, 232);
+  const scoreText = model.insufficient ? '—' : String(model.score);
+  ctx.fillStyle = fg; ctx.font = `700 92px ${pixel}`; ctx.fillText(scoreText, 858, 235);
+  const scoreWidth = ctx.measureText(scoreText).width;
+  if (!model.insufficient) {
+    ctx.fillStyle = dim; ctx.font = `400 19px ${pixel}`; ctx.fillText('/100', 866 + scoreWidth, 232);
+  }
   ctx.fillStyle = fg; ctx.font = `400 14px ${pixel}`; ctx.fillText(t(`report.${model.grade}`).toUpperCase(), 866, 270);
 
   ctx.strokeStyle = hair; ctx.beginPath(); ctx.moveTo(64, 312); ctx.lineTo(1136, 312); ctx.stroke();
   const done = visibleTasks.filter(task => completedTasks.has(task.id)).length;
   const facts = [
-    [t('card.matches'), `${model.found}/${model.checked}`],
+    [t('card.matches'), `${model.matches} · ${model.attempts}`],
     [t('card.categories'), String(model.categories.length)],
     [t('cleanup.progress'), `${done}/${visibleTasks.length}`]
   ];
@@ -592,17 +766,17 @@ const downloadResultCard = event => {
   ctx.fillStyle = dim; ctx.font = `400 12px ${pixel}`; ctx.fillText(t('card.review').toUpperCase(), 704, 354);
   const sourceNames = [...new Set(model.hits.map(sourceText))].slice(0, 3);
   ctx.fillStyle = fg; ctx.font = `400 18px ${pixel}`;
-  (sourceNames.length ? sourceNames : [t('stranger.noMatches')]).forEach((source, index) => {
+  (sourceNames.length ? sourceNames : [t(model.insufficient ? 'stranger.noConclusion' : 'stranger.noMatches')]).forEach((source, index) => {
     ctx.fillText(`${String(index + 1).padStart(2, '0')}  ${fitCanvasText(ctx, source, 390)}`, 704, 391 + index * 34);
   });
 
   ctx.strokeStyle = hair; ctx.beginPath(); ctx.moveTo(64, 536); ctx.lineTo(1136, 536); ctx.stroke();
   ctx.fillStyle = dim; ctx.font = `400 12px ${pixel}`;
-  ctx.fillText(t('card.note'), 64, 572);
+  ctx.fillText(t(model.insufficient ? 'card.noteInsufficient' : 'card.note'), 64, 572);
   ctx.textAlign = 'right'; ctx.fillText('traceerase · public view', 1136, 572); ctx.textAlign = 'left';
 
-  event.currentTarget.href = canvas.toDataURL('image/png');
-  event.currentTarget.download = `traceerase-public-view-${Date.now()}.png`;
+  const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+  if (blob) downloadBlob(blob, `traceerase-public-view-${fileStamp()}.png`);
 };
 $('#download-card').onclick = downloadResultCard;
 
@@ -614,22 +788,33 @@ eraseRange.oninput = () => {
 };
 
 const demoHits = () => [
-  { type: 'account', src: 'GitHub', cat: 'dev', url: 'https://github.com/demo-user', state: 'found', detail: t('demo.publicRepos'), detailKey: 'demo.publicRepos' },
-  { type: 'account', src: 'Telegram', cat: 'soc', url: 'https://t.me/demo_user', state: 'found', detail: t('demo.publicProfile'), detailKey: 'demo.publicProfile' },
-  { type: 'leak', src: t('demo.archive'), srcKey: 'demo.archive', cat: 'risk', state: 'found', detail: t('demo.oldMention'), detailKey: 'demo.oldMention' },
-  { type: 'account', src: 'Codeforces', cat: 'game', url: 'https://codeforces.com/profile/demo-user', state: 'free' }
+  { type: 'account', src: 'GitHub', cat: 'dev', url: 'https://github.com/demo-user', state: 'found', detail: t('demo.publicRepos'), detailKey: 'demo.publicRepos', method: 'demo', reason: 'sample' },
+  { type: 'account', src: 'Telegram', cat: 'soc', url: 'https://t.me/demo_user', state: 'found', detail: t('demo.publicProfile'), detailKey: 'demo.publicProfile', method: 'demo', reason: 'sample' },
+  { type: 'leak', src: t('demo.archive'), srcKey: 'demo.archive', cat: 'risk', state: 'found', detail: t('demo.oldMention'), detailKey: 'demo.oldMention', method: 'demo', reason: 'sample' },
+  { type: 'account', src: 'Codeforces', cat: 'game', url: 'https://codeforces.com/profile/demo-user', state: 'free', method: 'demo', reason: 'sample' }
 ];
 $('#demo').onclick = () => {
   cancelActiveRun(); const currentRun = runId;
   const demoItems = demoHits();
   activeIntent = selectedIntent; activeQuery = 'demo-user';
   reportMode = 'demo'; lastScanMeta = null; noteState = 'hero'; resetReport(); setCounts();
+  scanStartedAt = new Date();
+  lastScanMeta = {
+    q: 'demo-user', kind: 'username', total: demoItems.length,
+    catalog: sourceStats,
+    manual: [
+      { n: 'VK', url: 'https://vk.com/demo-user', direct: true },
+      { n: 'MAX', url: 'https://max.ru/', direct: false },
+      { n: 'Instagram', url: 'https://www.instagram.com/demo-user/', direct: true },
+      { n: 'TikTok', url: 'https://www.tiktok.com/@demo-user', direct: true }
+    ]
+  };
   renderReportTitle(); report.scrollIntoView({ behavior: 'smooth', block: 'start' });
   demoItems.forEach((h, i) => demoTimers.push(setTimeout(() => {
     if (currentRun !== runId) return;
     n[h.state]++; setCounts(); addRow(h); const progress = (i + 1) / demoItems.length;
     $('#arc').style.strokeDashoffset = 276.5 * (1 - progress); $('#pct').textContent = Math.round(progress * 100) + '%';
-    if (i === demoItems.length - 1) { $('#c-time').textContent = '2.1' + t('time.unit'); renderCompletion(); $('#rnote').textContent = t('demo.note'); }
+    if (i === demoItems.length - 1) { scanFinishedAt = new Date(); $('#c-time').textContent = '2.1' + t('time.unit'); renderCompletion(); $('#rnote').textContent = t('demo.note'); }
   }, i * 330)));
 };
 

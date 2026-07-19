@@ -1,7 +1,7 @@
 [
-  { "n": "GitHub",        "u": "https://github.com/{}",                     "cat": "dev" },
-  { "n": "GitLab",        "u": "https://gitlab.com/{}",                     "cat": "dev" },
-  { "n": "Gitea.com",     "u": "https://gitea.com/{}",                       "cat": "dev" },
+  { "n": "GitHub",        "u": "https://api.github.com/users/{}",            "link": "https://github.com/{}", "cat": "dev" },
+  { "n": "GitLab",        "u": "https://gitlab.com/api/v4/users?username={}", "link": "https://gitlab.com/{}", "cat": "dev" },
+  { "n": "Gitea.com",     "u": "https://gitea.com/api/v1/users/{}",           "link": "https://gitea.com/{}", "cat": "dev" },
   { "n": "Bitbucket",     "u": "https://bitbucket.org/{}/",                 "cat": "dev" },
   { "n": "Launchpad",     "u": "https://launchpad.net/~{}",                 "cat": "dev" },
   { "n": "Docker Hub",    "u": "https://hub.docker.com/v2/users/{}/",       "cat": "dev" },
@@ -21,7 +21,7 @@
   { "n": "Telegram",      "u": "https://t.me/{}",                           "cat": "soc", "has": "tgme_page_title" },
   { "n": "Reddit",        "u": "https://old.reddit.com/user/{}",            "cat": "soc" },
   { "n": "VK",            "u": "https://vk.com/{}",                         "cat": "soc", "has": "\"page_name\"" },
-  { "n": "Bluesky",       "u": "https://public.api.bsky.app/xrpc/com.atproto.identity.resolveHandle?handle={}.bsky.social", "cat": "soc", "has": "\"did\"" },
+  { "n": "Bluesky",       "u": "https://public.api.bsky.app/xrpc/com.atproto.identity.resolveHandle?handle={}", "link": "https://bsky.app/profile/{}", "cat": "soc", "has": "\"did\"", "handleSuffix": ".bsky.social", "missingStatuses": [400] },
   { "n": "Mastodon",      "u": "https://mastodon.social/@{}",               "cat": "soc" },
   { "n": "YouTube",       "u": "https://www.youtube.com/@{}",               "cat": "soc" },
   { "n": "Pinterest",     "u": "https://www.pinterest.com/{}/",             "cat": "soc", "has": "- Profile | Pinterest" },
@@ -57,7 +57,7 @@
 
   { "n": "Steam",         "u": "https://steamcommunity.com/id/{}",          "cat": "game", "has": "g_rgProfileData" },
   { "n": "Minecraft",     "u": "https://api.mojang.com/users/profiles/minecraft/{}", "cat": "game" },
-  { "n": "Codeforces",    "u": "https://codeforces.com/api/user.info?handles={}", "link": "https://codeforces.com/profile/{}", "cat": "game", "has": "\"status\":\"OK\"" },
+  { "n": "Codeforces",    "u": "https://codeforces.com/api/user.info?handles={}", "link": "https://codeforces.com/profile/{}", "cat": "game", "has": "\"status\":\"OK\"", "missingStatuses": [400] },
   { "n": "Lichess",       "u": "https://lichess.org/api/user/{}",           "link": "https://lichess.org/@/{}", "cat": "game" },
   { "n": "Chess.com",     "u": "https://api.chess.com/pub/player/{}",        "link": "https://www.chess.com/member/{}", "cat": "game" },
   { "n": "osu!",          "u": "https://osu.ppy.sh/users/{}",               "cat": "game" },

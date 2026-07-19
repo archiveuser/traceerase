@@ -165,11 +165,12 @@
         <b id="pct">0%</b>
       </div>
     </div>
+    <div class="print-meta" id="print-meta" aria-hidden="true"></div>
 
     <div class="counts stg">
-      <div class="glass spot" style="--i:0"><b id="c-found">0</b><small data-i18n="report.found">найдено следов</small></div>
-      <div class="glass spot" style="--i:1"><b id="c-free">0</b><small data-i18n="report.clean">чисто</small></div>
-      <div class="glass spot" style="--i:2"><b id="c-unknown">0</b><small data-i18n="report.unknown">требует проверки</small></div>
+      <div class="glass spot" style="--i:0"><b id="c-found">0</b><small data-i18n="report.found">публичных находок</small></div>
+      <div class="glass spot" style="--i:1"><b id="c-free">0</b><small data-i18n="report.clean">не найдено сейчас</small></div>
+      <div class="glass spot" style="--i:2"><b id="c-unknown">0</b><small data-i18n="report.unknown">без вывода</small></div>
       <div class="glass spot" style="--i:3"><b id="c-time">0.0</b><small data-i18n="report.time">времени</small></div>
     </div>
 
@@ -186,12 +187,12 @@
           <span data-i18n="stranger.score">Индекс видимости</span>
           <div><b id="stranger-score">0</b><i>/100</i></div>
           <strong id="stranger-grade">—</strong>
-          <p data-i18n="stranger.scoreNote">Ориентир по числу найденных страниц и типов источников. Это не оценка опасности.</p>
+          <p id="dossier-score-note" data-i18n="stranger.scoreNote">Ориентир по числу найденных страниц и типов источников. Это не оценка опасности.</p>
         </div>
       </div>
       <div class="dossier-facts">
         <div><span data-i18n="stranger.target">Отправная точка</span><b id="dossier-target">—</b></div>
-        <div><span data-i18n="stranger.matches">Найдено / проверено</span><b id="dossier-found">0/0</b></div>
+        <div><span data-i18n="stranger.matches">Совпадений · проверок</span><b id="dossier-found">0 · 0</b></div>
         <div><span data-i18n="stranger.categories">Категории</span><b id="dossier-categories">0</b></div>
       </div>
     </article>
@@ -206,15 +207,25 @@
 
     <div class="rcta glass" id="rcta" hidden>
       <div>
-        <h3><span data-i18n="report.foundLead">Найдено</span> <b id="ctan">0</b> <span id="rcta-tail">следов. Что делать дальше?</span></h3>
+        <h3><span data-i18n="report.foundLead">Найдено</span> <b id="ctan">0</b> <span id="rcta-tail">публичных находок. Что делать дальше?</span></h3>
         <p data-i18n="report.nextText">Мы собрали найденное в короткий маршрут — начни с самого заметного.</p>
       </div>
       <a class="btn mag" href="#cleanup" data-i18n="report.openRoute">Открыть маршрут →</a>
     </div>
     <div class="report-actions" id="report-actions" hidden>
-      <button class="ghostbtn" id="export-report" type="button" data-i18n="report.savePdf">Сохранить PDF</button>
+      <button class="ghostbtn" id="download-txt" type="button" data-i18n="report.downloadTxt">Скачать TXT</button>
+      <button class="ghostbtn" id="export-report" type="button" data-i18n="report.savePdf" data-i18n-title="report.pdfHint">Печать / PDF</button>
       <a class="btn cardbtn" id="download-card" href="#" download data-i18n="report.downloadCard">Скачать карточку</a>
     </div>
+    <aside class="manual-review glass" id="manual-review" hidden>
+      <div>
+        <div class="kicker" data-i18n="manual.kicker">Ручной слой</div>
+        <h3><b id="manual-count">0</b> <span data-i18n="manual.title">источников без ложной автоматики</span></h3>
+        <p data-i18n="manual.text">Эти сервисы требуют входа, полного адреса или не имеют публичного профиля по нику. Ссылка использует тот же ник (для email — часть до @) только как подсказку: совпадение нужно подтвердить самому.</p>
+      </div>
+      <div class="manual-actions" id="manual-links"></div>
+      <a class="source-link" href="/sources?mode=manual" data-i18n="manual.all">Открыть весь ручной каталог →</a>
+    </aside>
     <div class="cleanup glass" id="cleanup" hidden>
       <div class="cleanup-head"><div><div class="kicker" data-i18n="report.route">Маршрут очистки</div><h3 data-i18n="report.start">С чего начать</h3></div><div class="visibility"><span data-i18n="report.visibility">видимость</span><b id="visibility-label">—</b><i><i id="visibility-bar"></i></i></div></div>
       <div class="cleanup-progress"><span data-i18n="cleanup.progress">Пройдено</span><b id="cleanup-progress">0/5</b><i><i id="cleanup-progress-bar"></i></i></div>
@@ -257,7 +268,7 @@
   <div class="wrap rv">
     <div class="coverage-intro">
       <div><div class="kicker" data-i18n="coverage.kicker">Карта поиска</div><h2 data-i18n="coverage.title">Следы живут в разных частях интернета</h2></div>
-      <p data-i18n="coverage.lead">Каждый источник проверяется отдельно. Счётчики ниже загружаются из реальной базы TraceErase.</p>
+      <p data-i18n="coverage.lead">У каждого источника есть честный режим: автоматическая проверка только при надёжном ответе, иначе — прямой ручной маршрут.</p>
     </div>
     <div class="coverage-grid stg" id="coverage-grid" aria-live="polite"></div>
     <a class="source-link" href="/sources"><span data-i18n="coverage.all">Посмотреть все источники</span> <span>↗</span></a>
@@ -271,7 +282,7 @@
     <p class="sub" data-i18n="how.lead">Три последовательных шага. Никаких таблиц, которые нужно расшифровывать самостоятельно.</p>
     <div class="steps glass stg">
       <div class="step" style="--i:0"><div class="i">01</div><div><h3 data-i18n="how.oneTitle">Назови отправную точку</h3><p data-i18n="how.oneText">Введи никнейм, email или домен — то, по чему тебя уже могут искать другие.</p></div><span class="step-state">input</span></div>
-      <div class="step" style="--i:1"><div class="i">02</div><div><h3 data-i18n="how.twoTitle">TraceErase проверит источники</h3><p data-i18n="how.twoText">Сканер проходит по публичным профилям и техническим источникам, показывая ход проверки вживую.</p></div><span class="step-state">scan</span></div>
+      <div class="step" style="--i:1"><div class="i">02</div><div><h3 data-i18n="how.twoTitle">TraceErase проверит источники</h3><p data-i18n="how.twoText">Надёжные публичные ответы проверяются автоматически, а закрытые сервисы открываются как ручные маршруты — без выдуманных совпадений.</p></div><span class="step-state">scan</span></div>
       <div class="step" style="--i:2"><div class="i">03</div><div><h3 data-i18n="how.threeTitle">Ты получишь маршрут</h3><p data-i18n="how.threeText">Найденные страницы, оценку видимости и прямые действия — от проверки профиля до черновика обращения.</p></div><span class="step-state">control</span></div>
     </div>
   </div>

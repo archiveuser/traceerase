@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Источники TraceErase — где мы ищем цифровые следы</title>
-<meta name="description" content="Полный список публичных источников, которые проверяет TraceErase.">
+<meta name="description" content="246 источников TraceErase: надёжные автоматические проверки и официальные ручные маршруты без ложных совпадений.">
 <meta property="og:title" content="Источники TraceErase">
-<meta property="og:description" content="Где TraceErase ищет цифровые следы.">
+<meta property="og:description" content="246 источников: автоматические проверки и честные ручные маршруты.">
 <meta property="og:image" content="/og-traceerase.png">
 <meta name="theme-color" content="#0a0a0b">
 <script>try{document.documentElement.dataset.theme=localStorage.getItem('traceerase-theme')==='light'?'light':'dark';document.documentElement.lang=localStorage.getItem('traceerase-language')==='en'?'en':'ru'}catch{document.documentElement.dataset.theme='dark'}</script>
@@ -36,13 +36,21 @@
     <header class="sources-hero">
       <div class="kicker" data-i18n="sources.kicker">Прозрачность</div>
       <h1><span data-i18n="sources.title">Где мы ищем</span><br><span data-i18n="sources.title2">цифровые следы</span></h1>
-      <p data-i18n="sources.lead">TraceErase обращается только к публично доступным профилям и техническим источникам. Список обновляется вместе с движком.</p>
-      <div class="sources-total glass"><b id="sources-total">…</b><span data-i18n="sources.total">источников в покрытии</span></div>
+      <p data-i18n="sources.lead">TraceErase разделяет источники на автоматические и ручные. Автоматика работает только там, где ответ можно классифицировать без догадок.</p>
+      <div class="source-stats" aria-live="polite">
+        <div class="sources-total glass"><b id="sources-total">…</b><span data-i18n="sources.total">источников в каталоге</span></div>
+        <div class="sources-total glass"><b id="sources-auto">…</b><span data-i18n="sources.autoTotal">автоматически</span></div>
+        <div class="sources-total glass"><b id="sources-manual">…</b><span data-i18n="sources.manualTotal">ручных маршрутов</span></div>
+      </div>
     </header>
 
+    <div class="source-toolbar glass">
+      <label><span data-i18n="sources.searchLabel">Найти сервис</span><input id="source-search" type="search" autocomplete="off" placeholder="VK, MAX, GitHub…" data-i18n-placeholder="sources.searchPlaceholder"></label>
+      <div class="source-modes" id="source-modes" aria-label="Режим проверки" data-i18n-aria-label="sources.modeAria"></div>
+    </div>
     <div class="source-filters" id="source-filters" aria-label="Фильтр источников" data-i18n-aria-label="sources.filterAria"></div>
     <div class="source-grid" id="source-grid" aria-live="polite"></div>
-    <p class="sources-note" data-i18n="sources.note">Если сервис не отвечает или защищён от автоматических запросов, отчёт честно покажет «требует проверки», а не выдаст ложный результат.</p>
+    <p class="sources-note" data-i18n="sources.note">«Автоматически» означает проверяемый публичный ответ. «Вручную» — официальный маршрут без статуса found/free. Совпадение ника всегда нужно подтвердить: оно не доказывает личность владельца.</p>
   </div>
 </main>
 <script src="/sources.js" type="module"></script>

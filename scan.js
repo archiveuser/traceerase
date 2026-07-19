@@ -2,7 +2,76 @@
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 
-export const sites = JSON.parse(await readFile(new URL('./sites.json', import.meta.url), 'utf8'));
+const baseSites = JSON.parse(await readFile(new URL('./sites.json', import.meta.url), 'utf8'));
+const catalogGroups = JSON.parse(await readFile(new URL('./catalog.json', import.meta.url), 'utf8'));
+
+// Только эти источники участвуют в автоматической классификации. Для остальных
+// сервисов мы даём официальный/прямой маршрут, но никогда не выдумываем found/free.
+const AUTO_SOURCES = new Set([
+  'GitHub', 'GitLab', 'Gitea.com', 'Telegram', 'Bluesky',
+  'Minecraft', 'Codeforces', 'Chess.com', 'Lichess'
+]);
+const AUTO_METHODS = {
+  GitHub: 'status', GitLab: 'json-array', 'Gitea.com': 'status', Telegram: 'marker',
+  Bluesky: 'marker', Minecraft: 'status', Codeforces: 'marker', 'Chess.com': 'status', Lichess: 'status'
+};
+const ALLOWED_CATEGORIES = new Set(['dev', 'soc', 'message', 'blog', 'media', 'work', 'creator', 'market', 'game', 'link', 'learn']);
+const slug = value => String(value).toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+const homeFrom = site => {
+  if (site.home) return site.home;
+  const pattern = site.link || site.u;
+  try { return new URL(pattern.replace('{}', 'www')).origin + '/'; } catch { return ''; }
+};
+
+// catalog.json хранит компактные кортежи [название, официальный URL, прямой шаблон?].
+// Совпавшие с sites.json записи обогащают существующий источник, а не дублируют его.
+const merged = new Map(baseSites.map(site => [site.n.toLowerCase(), {
+  ...site,
+  mode: AUTO_SOURCES.has(site.n) ? 'auto' : 'manual',
+  method: AUTO_METHODS[site.n] || 'manual'
+}]));
+for (const [cat, entries] of Object.entries(catalogGroups)) {
+  for (const [n, home, profile = null] of entries) {
+    const key = n.toLowerCase();
+    const current = merged.get(key);
+    merged.set(key, current
+      ? { ...current, home: current.home || home, profile: current.profile || profile || current.link || current.u }
+      : { n, cat, home, profile, mode: 'manual', method: 'manual' });
+  }
+}
+
+export const sites = [...merged.values()].map(site => ({ ...site, id: site.id || slug(site.n), home: homeFrom(site) }));
+export const scanSites = sites.filter(site => site.mode === 'auto');
+export const manualSites = sites.filter(site => site.mode === 'manual');
+
+const assertCatalog = () => {
+  if (sites.length < 200) throw new Error(`Source catalog must contain at least 200 entries; received ${sites.length}`);
+  const ids = new Set();
+  for (const site of sites) {
+    if (!site.id || ids.has(site.id)) throw new Error(`Duplicate or invalid source id: ${site.id || site.n}`);
+    ids.add(site.id);
+    if (!ALLOWED_CATEGORIES.has(site.cat)) throw new Error(`Invalid category for ${site.n}: ${site.cat}`);
+    if (!['auto', 'manual'].includes(site.mode)) throw new Error(`Invalid mode for ${site.n}: ${site.mode}`);
+    if (!site.home?.startsWith('https://')) throw new Error(`Invalid official URL for ${site.n}`);
+    if (site.profile && (!site.profile.startsWith('https://') || (site.profile.match(/\{\}/g) || []).length !== 1)) {
+      throw new Error(`Manual route ${site.n} needs one HTTPS {} placeholder`);
+    }
+    if (site.mode === 'auto') {
+      if (typeof site.u !== 'string' || !site.u.startsWith('https://') || (site.u.match(/\{\}/g) || []).length !== 1) {
+        throw new Error(`Automatic source ${site.n} needs exactly one HTTPS {} placeholder`);
+      }
+      new URL(site.u.replace('{}', 'traceerase-test'));
+    }
+  }
+};
+assertCatalog();
+
+const COMMON_TLDS = new Set([
+  'ru', 'рф', 'com', 'org', 'net', 'info', 'biz', 'io', 'dev', 'app', 'ai', 'me', 'co', 'tv', 'fm',
+  'site', 'online', 'store', 'tech', 'pro', 'xyz', 'name', 'cloud', 'blog', 'shop', 'su', 'by', 'kz', 'ua',
+  'de', 'fr', 'it', 'es', 'nl', 'pl', 'cz', 'uk', 'us', 'ca', 'au', 'jp', 'cn', 'in', 'br', 'ch', 'se',
+  'no', 'fi', 'dk', 'ee', 'lv', 'lt', 'ge', 'am', 'az', 'kg', 'uz', 'md'
+]);
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
 const get = (url, headers = {}, ms = 9000) =>
@@ -16,7 +85,7 @@ const get = (url, headers = {}, ms = 9000) =>
  */
 export const kindOf = q =>
   /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(q) ? 'email'
-  : /^[a-z0-9][a-z0-9-]*(\.[a-z0-9-]+)*\.[a-z]{2,24}$/i.test(q) ? 'domain'
+  : /^[a-z0-9][a-z0-9-]*(\.[a-z0-9-]+)+$/i.test(q) && COMMON_TLDS.has(q.split('.').pop().toLowerCase()) ? 'domain'
   : /^[\w.\-]{2,40}$/.test(q) ? 'username'
   : null;
 
@@ -26,12 +95,29 @@ export const kindOf = q =>
  * всё сомнительное валится в 'free'/'unknown', а не в 'found'.
  */
 export const checkSite = async (site, user) => {
-  const url = site.u.replace('{}', encodeURIComponent(user));
-  const profileUrl = (site.link || site.u).replace('{}', encodeURIComponent(user));
+  // Bluesky принимает полный handle. Короткий ник дополняем стандартным доменом,
+  // а пользовательский handle вида name.example.com оставляем без изменений.
+  const lookupUser = site.handleSuffix && !user.includes('.') ? `${user}${site.handleSuffix}` : user;
+  const url = site.u.replace('{}', encodeURIComponent(lookupUser));
+  const profileUrl = (site.link || site.u).replace('{}', encodeURIComponent(lookupUser));
+  const checkedAt = new Date().toISOString();
+  const method = site.method || (site.has ? 'marker' : 'redirect');
+  const answer = (state, reason) => ({ state, url: profileUrl, method, reason, checkedAt });
   try {
     const r = await get(url);
 
-    if (r.status === 404 || r.status === 410) return { state: 'free', url: profileUrl };
+    if (r.status === 404 || r.status === 410) return answer('free', 'not-found-status');
+    if (r.status === 401 || r.status === 403 || r.status === 429 || r.status >= 500) {
+      return answer('unknown', r.status === 429 ? 'rate-limited' : 'source-blocked');
+    }
+
+    if (method === 'json-array') {
+      if (!r.ok) return answer('unknown', 'unexpected-status');
+      const data = await r.json().catch(() => null);
+      if (!Array.isArray(data)) return answer('unknown', 'invalid-response');
+      const match = data.some(item => String(item?.username || '').toLowerCase() === lookupUser.toLowerCase());
+      return answer(match ? 'found' : 'free', match ? 'exact-json-match' : 'no-exact-json-match');
+    }
 
     // soft-404: страница отдаётся всегда, профиль отличает только маркер в теле.
     // Проверять маркер надо до всего остального: у таких сайтов имя часто живёт
@@ -40,8 +126,10 @@ export const checkSite = async (site, user) => {
       // 403/429 — бот-стена или лимит: тела нет, судить не по чему.
       // Прочие коды (включая 400 от API Bluesky на несуществующий хендл) несут
       // осмысленное тело, и маркер в нём отвечает на вопрос точнее статуса.
-      if (r.status === 403 || r.status === 429) return { state: 'unknown', url: profileUrl };
-      return { state: (await r.text()).includes(site.has) ? 'found' : 'free', url: profileUrl };
+      const text = await r.text();
+      if (text.includes(site.has)) return answer('found', 'marker-present');
+      if (r.ok || (site.missingStatuses || []).includes(r.status)) return answer('free', 'marker-absent');
+      return answer('unknown', 'unexpected-status');
     }
 
     // Увели с профиля — профиля нет, какой бы код ни вернули.
@@ -50,14 +138,19 @@ export const checkSite = async (site, user) => {
     // Query отбрасываем намеренно — там ник остаётся (?subdomain=, ?new_domain=).
     // ponytail: ник вроде "com" или "www" даст ложный плюс. Пофиксить, если такие придут.
     const final = new URL(r.url);
-    if (!decodeURIComponent(final.host + final.pathname).toLowerCase().includes(user.toLowerCase())) return { state: 'free', url: profileUrl };
+    const hostLabels = decodeURIComponent(final.hostname).toLowerCase().split('.').filter(Boolean);
+    const pathSegments = decodeURIComponent(final.pathname).toLowerCase().split('/').filter(Boolean)
+      .map(segment => segment.replace(/^[@~]+/, ''));
+    if (![...hostLabels, ...pathSegments].includes(lookupUser.toLowerCase())) {
+      return answer('free', 'redirected-away');
+    }
 
     // URL сохранился, но ответ не 2xx — это бот-стена (npm, CodePen). Честно признаём незнание.
-    if (!r.ok) return { state: 'unknown', url: profileUrl };
+    if (!r.ok) return answer('unknown', 'unexpected-status');
 
-    return { state: 'found', url: profileUrl };
+    return answer('found', 'profile-response');
   } catch {
-    return { state: 'unknown', url: profileUrl };
+    return answer('unknown', 'network-error');
   }
 };
 
@@ -78,11 +171,21 @@ export const md5 = s => createHash('md5').update(s.trim().toLowerCase()).digest(
 /** Gravatar раскрывает аватар и публичный профиль по одному хешу email. */
 export const gravatar = async email => {
   const h = md5(email);
-  const [avatar, profile] = await Promise.all([
-    get(`https://www.gravatar.com/avatar/${h}?d=404`).then(r => r.ok).catch(() => false),
-    get(`https://www.gravatar.com/${h}.json`).then(r => (r.ok ? r.json() : null)).catch(() => null)
+  const [avatar, publicProfile] = await Promise.all([
+    get(`https://www.gravatar.com/avatar/${h}?d=404`)
+      .then(r => (r.ok ? true : [404, 410].includes(r.status) ? false : null))
+      .catch(() => null),
+    get(`https://www.gravatar.com/${h}.json`)
+      .then(async r => {
+        if ([404, 410].includes(r.status)) return { state: false, entry: null };
+        if (!r.ok) return { state: null, entry: null };
+        const data = await r.json().catch(() => null);
+        const entry = data?.entry?.[0];
+        return { state: entry && typeof entry === 'object' ? true : null, entry: entry || null };
+      })
+      .catch(() => ({ state: null, entry: null }))
   ]);
-  return { hash: h, avatar, profile: profile?.entry?.[0] || null };
+  return { hash: h, avatar, profileState: publicProfile.state, profile: publicProfile.entry };
 };
 
 /**
@@ -131,13 +234,21 @@ export const subdomains = async domain => {
   } catch { return null; }
 };
 
-/** HIBP требует платный ключ. Нет ключа — молча пропускаем, а не врём пользователю. */
+/** HIBP требует платный ключ. Отключённую проверку отличаем от временно упавшей. */
 export const breaches = async email => {
-  if (!process.env.HIBP_KEY) return null;
+  if (!process.env.HIBP_KEY) return { status: 'disabled', records: null };
   try {
     const r = await get(`https://haveibeenpwned.com/api/v3/breachedaccount/${encodeURIComponent(email)}?truncateResponse=false`, { 'hibp-api-key': process.env.HIBP_KEY });
-    if (r.status === 404) return [];
-    if (!r.ok) return null;
-    return (await r.json()).map(b => ({ name: b.Name, date: b.BreachDate, count: b.PwnCount, data: b.DataClasses }));
-  } catch { return null; }
+    if (r.status === 404) return { status: 'ok', records: [] };
+    if (!r.ok) return { status: 'unavailable', records: null };
+    const data = await r.json().catch(() => null);
+    if (!Array.isArray(data)) return { status: 'unavailable', records: null };
+    const valid = data.every(b => b && typeof b.Name === 'string' && typeof b.BreachDate === 'string'
+      && Number.isFinite(Number(b.PwnCount)) && Array.isArray(b.DataClasses));
+    if (!valid) return { status: 'unavailable', records: null };
+    return {
+      status: 'ok',
+      records: data.map(b => ({ name: b.Name, date: b.BreachDate, count: Number(b.PwnCount), data: b.DataClasses }))
+    };
+  } catch { return { status: 'unavailable', records: null }; }
 };
