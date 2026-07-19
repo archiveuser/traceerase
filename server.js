@@ -11,16 +11,35 @@ const MIME = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=u
 // ponytail: счётчик в памяти процесса. Redis — если нод станет больше одной.
 // 10/мин: защищает внешние сайты от нашего трафика, но не режет живую демонстрацию.
 const hits = new Map();
+const RATE_WINDOW_MS = 60_000;
+const MAX_TRACKED_CLIENTS = 10_000;
+const MAX_ACTIVE_SCANS = Math.max(1, Number.parseInt(process.env.MAX_ACTIVE_SCANS || '20', 10) || 20);
+let activeScans = 0;
+
+const pruneHits = (now = Date.now()) => {
+  for (const [ip, timestamps] of hits) {
+    if (!timestamps.some(t => now - t < RATE_WINDOW_MS)) hits.delete(ip);
+  }
+};
+
 const overLimit = ip => {
   const now = Date.now();
-  const a = (hits.get(ip) || []).filter(t => now - t < 60_000);
+  if (!hits.has(ip) && hits.size >= MAX_TRACKED_CLIENTS) {
+    pruneHits(now);
+    if (hits.size >= MAX_TRACKED_CLIENTS) return true;
+  }
+  const a = (hits.get(ip) || []).filter(t => now - t < RATE_WINDOW_MS);
   a.push(now); hits.set(ip, a);
   return a.length > 10;
 };
+setInterval(pruneHits, RATE_WINDOW_MS).unref();
 
-const sse = res => {
+const sse = (res, signal) => {
   res.writeHead(200, { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-cache, no-transform', connection: 'keep-alive', 'x-accel-buffering': 'no' });
-  return (event, data) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  return (event, data) => {
+    if (signal.aborted || res.writableEnded || res.destroyed) return false;
+    return res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  };
 };
 
 // null = источник не ответил. Показать «чисто» в этом случае — соврать пользователю.
@@ -29,13 +48,13 @@ const state = v => (v === null ? 'unknown' : v.length ? 'found' : 'free');
 const SCAN_TEXT = {
   ru: {
     invalid: 'Не похоже на ник, email или домен.', hash: 'MD5-хеш email публичен', provider: 'Почтовый провайдер',
-    breachOff: 'Проверка утечек (HIBP) выключена: не задан HIBP_KEY.', breaches: 'Утечки данных', records: 'записей',
+    breachOff: 'Проверка утечек (HIBP) выключена.', breaches: 'Утечки данных', records: 'записей',
     aRecords: 'A-записи', txtRecords: 'TXT-записи', registration: 'Регистрация домена', created: 'создан',
     subdomains: 'Поддомены в CT-логах', unavailable: 'Источник сейчас недоступен (crt.sh)', rate: 'Слишком много сканирований. Подожди минуту.'
   },
   en: {
     invalid: 'Enter a valid username, email, or domain.', hash: 'Email MD5 hash is public', provider: 'Email provider',
-    breachOff: 'Breach check (HIBP) is disabled: HIBP_KEY is not configured.', breaches: 'Data breaches', records: 'records',
+    breachOff: 'Breach check (HIBP) is disabled.', breaches: 'Data breaches', records: 'records',
     aRecords: 'A records', txtRecords: 'TXT records', registration: 'Domain registration', created: 'created',
     subdomains: 'Subdomains in CT logs', unavailable: 'Source is currently unavailable (crt.sh)', rate: 'Too many scans. Wait one minute and try again.'
   }
@@ -58,7 +77,9 @@ const manualHighlights = user => MANUAL_HIGHLIGHTS
   .filter(Boolean)
   .map(site => ({ n: site.n, url: manualUrl(site, user), direct: Boolean(site.profile?.includes('{}')) }));
 
-async function scanStream(q, send, lang = 'ru') {
+async function scanStream(q, send, lang = 'ru', signal) {
+  const rawSend = send;
+  send = (event, data) => { if (!signal?.aborted) rawSend(event, data); };
   const kind = kindOf(q);
   if (!kind) return send('error', { msg: scanText(lang, 'invalid') });
 
@@ -67,7 +88,7 @@ async function scanStream(q, send, lang = 'ru') {
   // Полный Bluesky-handle может выглядеть как домен (name.example.com), поэтому
   // для доменного ввода запускаем только этот безопасный account-контракт.
   const list = kind === 'domain' ? scanSites.filter(site => site.n === 'Bluesky') : scanSites;
-  const hibpEnabled = Boolean(process.env.HIBP_KEY);
+  const hibpEnabled = process.env.ENABLE_PUBLIC_HIBP === 'true' && Boolean(process.env.HIBP_KEY);
   const total = list.length + (kind === 'email' ? 2 + Number(hibpEnabled) : 0) + (kind === 'domain' ? 4 : 0);
 
   send('start', {
@@ -81,14 +102,14 @@ async function scanStream(q, send, lang = 'ru') {
   // Сайты идут через пул, чтобы не долбить сотней соединений разом.
   // Результат по-прежнему уходит в браузер сразу, как только пришёл.
   const jobs = [pool(list, 12, async s => {
-    const { state, url, method, reason, checkedAt } = await checkSite(s, user);
+    const { state, url, method, reason, checkedAt } = await checkSite(s, user, signal);
     send('hit', { type: 'account', src: s.n, cat: s.cat, url, state, method, reason, checkedAt });
     tick();
-  })];
+  }, signal)];
 
   if (kind === 'email') {
     const emailJobs = [
-      gravatar(q).then(g => {
+      gravatar(q, signal).then(g => {
         const profileFound = g.avatar === true || g.profileState === true;
         const profileMissing = g.avatar === false && g.profileState === false;
         send('hit', {
@@ -101,13 +122,13 @@ async function scanStream(q, send, lang = 'ru') {
         if (profileFound) send('hit', { type: 'leak', src: scanText(lang, 'hash'), cat: 'risk', url: null, state: 'found', detail: g.hash, ...evidence('gravatar', 'public-hash') });
         tick();
       }),
-      dns(domain, 'MX').then(mx => {
+      dns(domain, 'MX', signal).then(mx => {
         send('hit', { type: 'info', src: scanText(lang, 'provider'), cat: 'infra', state: state(mx), detail: mx?.map(m => m.split(' ').pop()).join(', ') || null, ...evidence('dns', mx === null ? 'source-unavailable' : mx.length ? 'records-present' : 'no-records') });
         tick();
       })
     ];
     if (hibpEnabled) emailJobs.push(
-      breaches(q).then(result => {
+      breaches(q, signal).then(result => {
         if (result.status === 'disabled') send('note', { msg: scanText(lang, 'breachOff') });
         else if (result.status === 'unavailable') {
           send('hit', { type: 'leak', src: scanText(lang, 'breaches'), cat: 'risk', state: 'unknown', ...evidence('hibp', 'source-unavailable') });
@@ -125,13 +146,13 @@ async function scanStream(q, send, lang = 'ru') {
 
   if (kind === 'domain') {
     jobs.push(
-      dns(domain, 'A').then(a => { send('hit', { type: 'info', src: scanText(lang, 'aRecords'), cat: 'infra', state: state(a), detail: a?.join(', ') || null, ...evidence('dns', a === null ? 'source-unavailable' : a.length ? 'records-present' : 'no-records') }); tick(); }),
-      dns(domain, 'TXT').then(t => { send('hit', { type: 'info', src: scanText(lang, 'txtRecords'), cat: 'infra', state: state(t), detail: t?.join(' | ').slice(0, 300) || null, ...evidence('dns', t === null ? 'source-unavailable' : t.length ? 'records-present' : 'no-records') }); tick(); }),
-      rdap(domain).then(w => {
+      dns(domain, 'A', signal).then(a => { send('hit', { type: 'info', src: scanText(lang, 'aRecords'), cat: 'infra', state: state(a), detail: a?.join(', ') || null, ...evidence('dns', a === null ? 'source-unavailable' : a.length ? 'records-present' : 'no-records') }); tick(); }),
+      dns(domain, 'TXT', signal).then(t => { send('hit', { type: 'info', src: scanText(lang, 'txtRecords'), cat: 'infra', state: state(t), detail: t?.join(' | ').slice(0, 300) || null, ...evidence('dns', t === null ? 'source-unavailable' : t.length ? 'records-present' : 'no-records') }); tick(); }),
+      rdap(domain, signal).then(w => {
         send('hit', { type: 'info', src: scanText(lang, 'registration'), cat: 'infra', state: w ? 'found' : 'unknown', detail: w ? `${w.registrar || '—'} · ${scanText(lang, 'created')} ${String(w.created).slice(0, 10)}` : null, ...evidence('rdap', w ? 'registration-record' : 'source-unavailable') });
         tick();
       }),
-      subdomains(domain).then(subs => {
+      subdomains(domain, signal).then(subs => {
         send('hit', {
           type: 'leak', src: scanText(lang, 'subdomains'), cat: 'risk', url: `https://crt.sh/?q=%25.${domain}`,
           state: state(subs),
@@ -185,10 +206,15 @@ const server = createServer(async (req, res) => {
     const lang = url.searchParams.get('lang') === 'en' ? 'en' : 'ru';
     if (!q) { res.writeHead(400).end('no query'); return; }
     if (overLimit(ip)) { res.writeHead(429, { 'content-type': 'text/plain; charset=utf-8' }).end(scanText(lang, 'rate')); return; }
-    const send = sse(res);
-    req.on('close', () => res.end());
-    try { await scanStream(q, send, lang); } catch (e) { send('error', { msg: String(e.message || e) }); }
-    return res.end();
+    if (activeScans >= MAX_ACTIVE_SCANS) { res.writeHead(503, { 'content-type': 'text/plain; charset=utf-8', 'retry-after': '5' }).end('scan capacity reached'); return; }
+    activeScans++;
+    const controller = new AbortController();
+    const send = sse(res, controller.signal);
+    res.on('close', () => controller.abort());
+    try { await scanStream(q, send, lang, controller.signal); } catch (e) { send('error', { msg: String(e.message || e) }); }
+    finally { activeScans--; }
+    if (!res.writableEnded && !res.destroyed) res.end();
+    return;
   }
 
   // статика; resolve + префикс-проверка режет ../ обход

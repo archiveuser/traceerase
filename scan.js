@@ -74,8 +74,19 @@ const COMMON_TLDS = new Set([
 ]);
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
-const get = (url, headers = {}, ms = 9000) =>
-  fetch(url, { headers: { 'user-agent': UA, 'accept-language': 'ru,en;q=0.9', ...headers }, redirect: 'follow', signal: AbortSignal.timeout(ms) });
+const get = async (url, headers = {}, ms = 9000, parentSignal) => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), ms);
+  const abort = () => controller.abort();
+  if (parentSignal?.aborted) abort();
+  else parentSignal?.addEventListener('abort', abort, { once: true });
+  try {
+    return await fetch(url, { headers: { 'user-agent': UA, 'accept-language': 'ru,en;q=0.9', ...headers }, redirect: 'follow', signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+    parentSignal?.removeEventListener('abort', abort);
+  }
+};
 
 /**
  * email → domain → username. Порядок важен: "a@b.com" содержит точку, но это email,
@@ -94,7 +105,7 @@ export const kindOf = q =>
  * Врать «след найден» нельзя: один ложный плюс дороже десяти пропусков, поэтому
  * всё сомнительное валится в 'free'/'unknown', а не в 'found'.
  */
-export const checkSite = async (site, user) => {
+export const checkSite = async (site, user, signal) => {
   // Bluesky принимает полный handle. Короткий ник дополняем стандартным доменом,
   // а пользовательский handle вида name.example.com оставляем без изменений.
   const lookupUser = site.handleSuffix && !user.includes('.') ? `${user}${site.handleSuffix}` : user;
@@ -104,7 +115,7 @@ export const checkSite = async (site, user) => {
   const method = site.method || (site.has ? 'marker' : 'redirect');
   const answer = (state, reason) => ({ state, url: profileUrl, method, reason, checkedAt });
   try {
-    const r = await get(url);
+    const r = await get(url, {}, 9000, signal);
 
     if (r.status === 404 || r.status === 410) return answer('free', 'not-found-status');
     if (r.status === 401 || r.status === 403 || r.status === 429 || r.status >= 500) {
@@ -159,23 +170,23 @@ export const checkSite = async (site, user) => {
  * способ собрать бот-стены и таймауты вместо ответов: сайты начинают резать,
  * и весь отчёт превращается в стену «требует проверки».
  */
-export const pool = async (items, limit, fn) => {
+export const pool = async (items, limit, fn, signal) => {
   let i = 0;
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (i < items.length) await fn(items[i++]);
+    while (i < items.length && !signal?.aborted) await fn(items[i++]);
   }));
 };
 
 export const md5 = s => createHash('md5').update(s.trim().toLowerCase()).digest('hex');
 
 /** Gravatar раскрывает аватар и публичный профиль по одному хешу email. */
-export const gravatar = async email => {
+export const gravatar = async (email, signal) => {
   const h = md5(email);
   const [avatar, publicProfile] = await Promise.all([
-    get(`https://www.gravatar.com/avatar/${h}?d=404`)
+    get(`https://www.gravatar.com/avatar/${h}?d=404`, {}, 9000, signal)
       .then(r => (r.ok ? true : [404, 410].includes(r.status) ? false : null))
       .catch(() => null),
-    get(`https://www.gravatar.com/${h}.json`)
+    get(`https://www.gravatar.com/${h}.json`, {}, 9000, signal)
       .then(async r => {
         if ([404, 410].includes(r.status)) return { state: false, entry: null };
         if (!r.ok) return { state: null, entry: null };
@@ -194,9 +205,9 @@ export const gravatar = async email => {
  */
 
 /** DNS-over-HTTPS, без резолвера и без зависимостей. */
-export const dns = async (name, type) => {
+export const dns = async (name, type, signal) => {
   try {
-    const r = await get(`https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(name)}&type=${type}`, { accept: 'application/dns-json' });
+    const r = await get(`https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(name)}&type=${type}`, { accept: 'application/dns-json' }, 9000, signal);
     if (!r.ok) return null;
     const j = await r.json();
     return (j.Answer || []).map(a => a.data);
@@ -204,9 +215,9 @@ export const dns = async (name, type) => {
 };
 
 /** RDAP — публичный whois. Отдаёт регистратора и даты. */
-export const rdap = async domain => {
+export const rdap = async (domain, signal) => {
   try {
-    const r = await get(`https://rdap.org/domain/${encodeURIComponent(domain)}`, { accept: 'application/rdap+json' });
+    const r = await get(`https://rdap.org/domain/${encodeURIComponent(domain)}`, { accept: 'application/rdap+json' }, 9000, signal);
     if (!r.ok) return null;
     const j = await r.json();
     const ev = Object.fromEntries((j.events || []).map(e => [e.eventAction, e.eventDate]));
@@ -223,11 +234,31 @@ export const rdap = async domain => {
  * crt.sh — каждый выпущенный TLS-сертификат публичен. Отсюда утекают внутренние поддомены.
  * Сервис регулярно отдаёт 502 под нагрузкой, поэтому падение обязано вернуть null, а не [].
  */
-export const subdomains = async domain => {
+const MAX_CT_RESPONSE_BYTES = 1_000_000;
+const readJsonWithinLimit = async (response, maxBytes) => {
+  const length = Number(response.headers?.get?.('content-length') || 0);
+  if (length > maxBytes || !response.body?.getReader) return null;
+  const reader = response.body.getReader();
+  const chunks = [];
+  let size = 0;
   try {
-    const r = await get(`https://crt.sh/?q=${encodeURIComponent('%.' + domain)}&output=json`, {}, 20000);
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > maxBytes) { await reader.cancel(); return null; }
+      chunks.push(value);
+    }
+  } finally { reader.releaseLock(); }
+  return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+};
+
+export const subdomains = async (domain, signal) => {
+  try {
+    const r = await get(`https://crt.sh/?q=${encodeURIComponent('%.' + domain)}&output=json`, {}, 20000, signal);
     if (!r.ok) return null;
-    const j = await r.json();
+    const j = await readJsonWithinLimit(r, MAX_CT_RESPONSE_BYTES);
+    if (!Array.isArray(j)) return null;
     return [...new Set(j.flatMap(c => String(c.name_value).split('\n')))]
       .filter(n => n.endsWith(domain) && !n.startsWith('*'))
       .sort();
@@ -235,10 +266,10 @@ export const subdomains = async domain => {
 };
 
 /** HIBP требует платный ключ. Отключённую проверку отличаем от временно упавшей. */
-export const breaches = async email => {
+export const breaches = async (email, signal) => {
   if (!process.env.HIBP_KEY) return { status: 'disabled', records: null };
   try {
-    const r = await get(`https://haveibeenpwned.com/api/v3/breachedaccount/${encodeURIComponent(email)}?truncateResponse=false`, { 'hibp-api-key': process.env.HIBP_KEY });
+    const r = await get(`https://haveibeenpwned.com/api/v3/breachedaccount/${encodeURIComponent(email)}?truncateResponse=false`, { 'hibp-api-key': process.env.HIBP_KEY }, 9000, signal);
     if (r.status === 404) return { status: 'ok', records: [] };
     if (!r.ok) return { status: 'unavailable', records: null };
     const data = await r.json().catch(() => null);

@@ -1,6 +1,6 @@
 // node test.js — каталог, классификация и критические live-контракты.
 import assert from 'node:assert/strict';
-import { kindOf, checkSite, gravatar, breaches, md5, sites, scanSites, manualSites } from './scan.js';
+import { kindOf, checkSite, gravatar, breaches, md5, sites, scanSites, manualSites, subdomains } from './scan.js';
 
 assert.equal(kindOf('durov'), 'username');
 assert.equal(kindOf('john.doe-91'), 'username');
@@ -72,6 +72,17 @@ try {
   const unavailableGravatar = await gravatar('person@example.com');
   assert.equal(unavailableGravatar.avatar, null);
   assert.equal(unavailableGravatar.profileState, null);
+
+  globalThis.fetch = async (_, options) => new Promise((_, reject) =>
+    options.signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true })
+  );
+  const cancellation = new AbortController();
+  const cancelledCheck = checkSite({ n: 'Mock', u: 'https://example.com/user/{}' }, 'demo', cancellation.signal);
+  cancellation.abort();
+  assert.equal((await cancelledCheck).state, 'unknown');
+
+  globalThis.fetch = async () => new Response('x'.repeat(1_000_001), { status: 200 });
+  assert.equal(await subdomains('example.com'), null);
 
   globalThis.fetch = async () => response({ status: 404 });
   const missingGravatar = await gravatar('nobody@example.com');
