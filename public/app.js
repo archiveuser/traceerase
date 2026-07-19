@@ -290,6 +290,95 @@ const setCounts = () => {
   renderCtaTail();
 };
 
+/* ---------- карта следа: не «связи всего со всем», а только подтверждённые профили ---------- */
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const graphBox = $('#trace-graph'), graphLinks = $('#graph-links'), graphNodes = $('#graph-nodes');
+const GRAPH_ROOT = { x: 480, y: 210 };
+const GRAPH_SLOTS = [
+  { x: 184, y: 92 }, { x: 748, y: 92 }, { x: 844, y: 236 },
+  { x: 690, y: 344 }, { x: 274, y: 338 }, { x: 112, y: 236 },
+  { x: 480, y: 54 }, { x: 480, y: 372 }, { x: 850, y: 370 }
+];
+let graphState = { target: '', nodes: [], finished: false };
+const svgNode = name => document.createElementNS(SVG_NS, name);
+const graphLabel = value => {
+  const text = String(value || '—');
+  return text.length > 20 ? `${text.slice(0, 19)}…` : text;
+};
+const graphLabelPosition = point => {
+  if (point.x < 270) return { x: point.x + 15, anchor: 'start' };
+  if (point.x > 690) return { x: point.x - 15, anchor: 'end' };
+  return { x: point.x, anchor: 'middle' };
+};
+const graphSlot = index => {
+  if (GRAPH_SLOTS[index]) return GRAPH_SLOTS[index];
+  // После базовых позиций раскладываем оставшиеся узлы по золотому углу,
+  // чтобы длинная выдача не накладывала один профиль на другой.
+  const angle = index * 2.399963229728653;
+  const radius = 148 + (index % 3) * 30;
+  return { x: 480 + Math.cos(angle) * radius, y: 210 + Math.sin(angle) * radius * .7 };
+};
+const graphText = (group, text, x, y, className, anchor = 'middle') => {
+  const el = svgNode('text');
+  el.classList.add(className); el.setAttribute('x', x); el.setAttribute('y', y); el.setAttribute('text-anchor', anchor);
+  el.textContent = text; group.append(el); return el;
+};
+const graphCount = () => { $('#graph-count').textContent = `${graphState.nodes.length} · ${t('graph.count')}`; };
+const graphRoot = target => {
+  graphBox.hidden = false; graphLinks.replaceChildren(); graphNodes.replaceChildren();
+  graphState = { target, nodes: [], finished: false };
+  const node = svgNode('g'); node.classList.add('trace-node', 'trace-node-root');
+  const square = svgNode('rect'); square.classList.add('trace-node-dot'); square.setAttribute('x', GRAPH_ROOT.x - 8); square.setAttribute('y', GRAPH_ROOT.y - 8); square.setAttribute('width', 16); square.setAttribute('height', 16);
+  const title = svgNode('title'); title.textContent = t('graph.rootTitle', { target });
+  node.append(title, square);
+  graphText(node, graphLabel(target), GRAPH_ROOT.x, GRAPH_ROOT.y + 32, 'trace-node-label');
+  graphText(node, t('graph.root'), GRAPH_ROOT.x, GRAPH_ROOT.y + 48, 'trace-node-sub');
+  graphNodes.append(node); graphCount();
+  $('#graph-note').textContent = t('graph.waiting');
+};
+const graphAdd = hit => {
+  if (hit.state !== 'found' || hit.type !== 'account' || !graphState.target) return;
+  const url = safeHttpUrl(hit.url);
+  const key = `${sourceText(hit)}|${url}`;
+  if (graphState.nodes.some(node => node.key === key)) return;
+  const point = graphSlot(graphState.nodes.length);
+  const edge = svgNode('line');
+  edge.classList.add('trace-edge', 'is-account');
+  edge.setAttribute('x1', GRAPH_ROOT.x); edge.setAttribute('y1', GRAPH_ROOT.y); edge.setAttribute('x2', point.x); edge.setAttribute('y2', point.y);
+  graphLinks.append(edge);
+
+  const node = svgNode('g'); node.classList.add('trace-node'); if (url) node.classList.add('is-link');
+  const title = svgNode('title'); title.textContent = `${sourceText(hit)} — ${t('graph.profile')}`;
+  const dot = svgNode('circle'); dot.classList.add('trace-node-dot'); dot.setAttribute('cx', point.x); dot.setAttribute('cy', point.y); dot.setAttribute('r', 7);
+  const label = graphLabelPosition(point);
+  node.append(title, dot);
+  graphText(node, graphLabel(sourceText(hit)), label.x, point.y - 14, 'trace-node-label', label.anchor);
+  graphText(node, CAT[hit.cat] || t('graph.profile'), label.x, point.y + 23, 'trace-node-sub', label.anchor);
+  if (url) {
+    const wrapper = svgNode('a');
+    wrapper.setAttribute('href', url); wrapper.setAttribute('target', '_blank'); wrapper.setAttribute('rel', 'noopener noreferrer');
+    wrapper.append(node); graphNodes.append(wrapper);
+  } else graphNodes.append(node);
+  graphState.nodes.push({ key, hit }); graphCount();
+  $('#graph-note').textContent = t('graph.found', { count: graphState.nodes.length });
+};
+const graphFinish = () => {
+  if (!graphState.target) return;
+  graphState.finished = true;
+  if (!graphState.nodes.length) $('#graph-note').textContent = t('graph.empty');
+};
+const resetGraph = () => {
+  graphState = { target: '', nodes: [], finished: false };
+  graphLinks.replaceChildren(); graphNodes.replaceChildren(); graphBox.hidden = true;
+};
+const refreshGraph = () => {
+  if (!graphState.target) return;
+  const previous = graphState.nodes.map(node => node.hit);
+  const finished = graphState.finished;
+  graphRoot(graphState.target); previous.forEach(graphAdd);
+  if (finished) graphFinish();
+};
+
 const addRow = h => {
   const normalized = { ...h, url: safeHttpUrl(h.url), checkedAt: h.checkedAt || new Date().toISOString() };
   allHits.push(normalized);
@@ -326,6 +415,7 @@ const addRow = h => {
   }
   // найденные — наверх: жюри видит следы, а не список «чисто»
   if (h.state === 'found') { foundHits.push(normalized); rows.prepend(el); } else rows.append(el);
+  graphAdd(normalized);
 };
 
 const rankedFoundHits = () => {
@@ -473,6 +563,7 @@ $('#cleanup-list').addEventListener('change', event => {
 const renderCompletion = () => {
   insightsReady = true;
   const model = deriveReportModel();
+  graphFinish();
   $('#rcta').hidden = model.found === 0;
   $('#report-actions').hidden = false;
   $('#cleanup').hidden = model.found === 0;
@@ -509,6 +600,7 @@ const resetReport = () => {
   $$('.chip').forEach(chip => chip.classList.toggle('on', chip.dataset.f === 'found'));
   n = { found: 0, free: 0, unknown: 0 }; foundHits = []; allHits = []; completedTasks.clear(); visibleTasks = [];
   scanStartedAt = null; scanFinishedAt = null;
+  resetGraph();
   insightsReady = false;
   ['#c-found', '#c-free', '#c-unknown'].forEach(selector => ($(selector).textContent = '0'));
   $('#c-time').textContent = '0.0'; $('#ctan').textContent = '0';
@@ -555,7 +647,7 @@ $('#scan').onsubmit = e => {
   es.addEventListener('start', ev => {
     if (currentRun !== runId) return;
     const d = JSON.parse(ev.data);
-    lastScanMeta = d; renderReportTitle();
+    lastScanMeta = d; graphRoot(activeQuery); renderReportTitle();
   });
   es.addEventListener('hit', ev => {
     if (currentRun !== runId) return;
@@ -809,7 +901,7 @@ $('#demo').onclick = () => {
       { n: 'TikTok', url: 'https://www.tiktok.com/@demo-user', direct: true }
     ]
   };
-  renderReportTitle(); report.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  graphRoot(activeQuery); renderReportTitle(); report.scrollIntoView({ behavior: 'smooth', block: 'start' });
   demoItems.forEach((h, i) => demoTimers.push(setTimeout(() => {
     if (currentRun !== runId) return;
     n[h.state]++; setCounts(); addRow(h); const progress = (i + 1) / demoItems.length;
@@ -823,6 +915,7 @@ document.addEventListener('traceerase:languagechange', () => {
   renderCtaTail();
   updateSignalBoard();
   renderCoverage();
+  refreshGraph();
   renderReportTitle();
   renderNote();
   go.textContent = es ? t('scan.running') : report.hidden ? t('hero.cta') : t('scan.again');
