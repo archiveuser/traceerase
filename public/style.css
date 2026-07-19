@@ -255,6 +255,29 @@ h1 .go::after {
 @keyframes slide { to { transform: translateX(-50%) } }
 
 /* ---------- форма ---------- */
+.scan-purpose {
+  min-inline-size: 0; max-width: 640px; margin-bottom: 9px; border: 0; opacity: 0;
+  animation: fadeUp .9s var(--flow) .7s forwards;
+}
+.scan-purpose-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  margin-bottom: 8px; color: var(--faint); font: 9px var(--pixel); letter-spacing: .11em; text-transform: uppercase;
+}
+.scan-purpose-head b { color: var(--dim); font-weight: 400 }
+.intent-options { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px }
+.intent-option {
+  min-width: 0; padding: 10px 11px; display: flex; align-items: center; gap: 8px;
+  background: transparent; color: var(--dim); border: 1px solid var(--hair); box-shadow: none;
+  font: 700 9px var(--pixel); text-align: left; text-transform: uppercase; cursor: pointer; transform: none;
+  transition: color .25s var(--flow), border-color .25s var(--flow), background .25s var(--flow);
+}
+.intent-option input { position: absolute; width: 1px; height: 1px; flex: none; padding: 0; margin: 0; border: 0; opacity: 0; pointer-events: none }
+.intent-option span { color: var(--faint); font-weight: 400 }
+.intent-option b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.intent-option:hover { color: var(--paper); border-color: var(--paper); box-shadow: none; transform: none }
+.intent-option:focus-within { outline: 2px solid var(--paper); outline-offset: 3px }
+.intent-option.is-active { background: var(--paper); border-color: var(--paper); color: var(--ink) }
+.intent-option.is-active span { color: var(--ink); opacity: .55 }
 .scan { display: flex; gap: 8px; flex-wrap: wrap; max-width: 640px; padding: 8px; scroll-margin-top: 110px; opacity: 0; animation: fadeUp .9s var(--flow) .74s forwards }
 .scan:focus-within { border-color: var(--paper) }
 input, textarea {
@@ -361,7 +384,7 @@ header .note { opacity: 0; animation: fadeUp .9s var(--flow) .86s forwards }
 /* ---------- отчёт ---------- */
 #report { padding-top: 110px }
 .rhead { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; margin-bottom: 32px }
-#rtitle { word-break: break-all }
+#rtitle { word-break: normal; overflow-wrap: anywhere }
 .ring { position: relative; width: 84px; height: 84px; flex: none }
 .ring svg { width: 100%; height: 100%; transform: rotate(-90deg) }
 .ring circle { fill: none; stroke: var(--hair); stroke-width: 5 }
@@ -390,7 +413,7 @@ header .note { opacity: 0; animation: fadeUp .9s var(--flow) .86s forwards }
 .chip.on { background: var(--paper); color: var(--ink); border-color: var(--paper) }
 
 .rows { overflow: hidden }
-.rows:empty::after { content: "// ожидание данных…"; display: block; padding: 42px; text-align: center; color: var(--faint); font-size: 12px }
+.rows:empty::after { content: attr(data-empty); display: block; padding: 42px; text-align: center; color: var(--faint); font-size: 12px }
 .rows.onlyfound .row:not(.is-found) { display: none }
 .row {
   position: relative; z-index: 1;
@@ -421,21 +444,74 @@ header .note { opacity: 0; animation: fadeUp .9s var(--flow) .86s forwards }
   transition: background .25s, color .25s, border-color .25s;
 }
 .row .act:hover { background: var(--paper); color: var(--ink); border-color: var(--paper); box-shadow: none }
-@media (max-width: 640px) { .row { grid-template-columns: 1fr auto } .row .cat { display: none } }
+@media (max-width: 640px) { .row { grid-template-columns: 1fr auto } .row .cat { display: none } .row .act { grid-column: 1 / -1; justify-self: start } }
 
 .rcta { margin-top: 22px; padding: 26px; border-color: var(--paper); display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; animation: fadeUp .7s var(--flow) backwards }
 .rcta h3 b { background: var(--paper); color: var(--ink); padding: 1px 6px }
 .rcta p { color: var(--dim); font-size: 12px; margin-top: 6px }
-.report-actions { display: flex; justify-content: flex-end; margin-top: 12px }
+.report-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; margin-top: 12px }
+.cardbtn { padding: 12px 18px; font-size: 12px }
+
+/* Главный продуктовый артефакт: не абстрактный score, а собранное публичное досье. */
+.stranger-view { margin: 0 0 26px; overflow: hidden; border-color: var(--paper); animation: dossierIn .8s var(--flow) backwards }
+@keyframes dossierIn { from { opacity: 0; transform: translateY(18px); clip-path: inset(0 0 100% 0) } to { opacity: 1; transform: none; clip-path: inset(0) } }
+.dossier-topline {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 9px 14px; background: var(--paper); color: var(--ink);
+  font: 700 9px var(--pixel); letter-spacing: .13em; text-transform: uppercase;
+}
+.dossier-topline b { font-weight: 400; opacity: .62 }
+.dossier-grid { display: grid; grid-template-columns: minmax(0, 1fr) 285px }
+.dossier-story { min-width: 0; padding: clamp(25px, 4vw, 40px) }
+.dossier-story .kicker { margin-bottom: 14px }
+.dossier-story h3 { font-size: clamp(20px, 3vw, 29px); line-height: 1.25 }
+.dossier-story h3 b { color: var(--paper); border-bottom: 1px solid var(--paper) }
+.dossier-story > p { max-width: 60ch; min-height: 3.2em; margin-top: 16px; color: var(--dim); font-size: 13px }
+.dossier-sources { margin-top: 28px }
+.dossier-sources > span { display: block; margin-bottom: 9px; color: var(--faint); font: 9px var(--pixel); letter-spacing: .11em; text-transform: uppercase }
+#dossier-sources { display: flex; flex-wrap: wrap; gap: 6px }
+#dossier-sources span { padding: 6px 8px; border: 1px solid var(--hair); color: var(--tx); font: 9px var(--pixel); text-transform: uppercase }
+#dossier-sources span:first-child { border-color: var(--paper); color: var(--paper) }
+.dossier-score {
+  padding: clamp(25px, 4vw, 36px); border-left: 1px solid var(--hair);
+  background-image: linear-gradient(var(--hair-soft) 1px, transparent 1px), linear-gradient(90deg, var(--hair-soft) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+.dossier-score > span { color: var(--faint); font: 9px var(--pixel); letter-spacing: .11em; text-transform: uppercase }
+.dossier-score > div { display: flex; align-items: baseline; margin: 24px 0 4px; line-height: 1 }
+.dossier-score b { color: var(--paper); font: 700 clamp(52px, 7vw, 74px)/.9 var(--pixel) }
+.dossier-score i { color: var(--faint); font: 12px var(--pixel); font-style: normal }
+.dossier-score strong { color: var(--tx); font: 400 10px var(--pixel); letter-spacing: .08em; text-transform: uppercase }
+.dossier-score p { margin-top: 24px; color: var(--faint); font-size: 10px; line-height: 1.55 }
+.dossier-facts { display: grid; grid-template-columns: 1.5fr .75fr .75fr; border-top: 1px solid var(--hair) }
+.dossier-facts > div { min-width: 0; padding: 15px 18px }
+.dossier-facts > div + div { border-left: 1px solid var(--hair) }
+.dossier-facts span { display: block; margin-bottom: 4px; color: var(--faint); font: 8px var(--pixel); letter-spacing: .1em; text-transform: uppercase }
+.dossier-facts b { display: block; overflow: hidden; color: var(--paper); font: 400 12px var(--pixel); text-overflow: ellipsis; white-space: nowrap }
+
 .cleanup { margin-top: 18px; padding: 25px; border-color: var(--hair); }
 .cleanup-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 22px; margin-bottom: 18px }
 .cleanup .kicker { margin-bottom: 8px }.cleanup h3 { font-size: 17px }
 .visibility { min-width: 154px; color: var(--dim); font-size: 10px; text-align: right; text-transform: uppercase; letter-spacing: .09em; font-family: var(--pixel) }
 .visibility b { display: block; color: var(--paper); font-weight: 400; margin: 4px 0 8px }
 .visibility > i { display: block; height: 4px; background: var(--hair); overflow: hidden }.visibility > i > i { display: block; width: 0; height: 100%; background: var(--paper); transition: width .7s var(--flow) }
-.cleanup ol { list-style: none; counter-reset: cleanup }
-.cleanup li { counter-increment: cleanup; display: flex; align-items: center; gap: 14px; padding: 12px 0; border-top: 1px solid var(--hair-soft); color: var(--dim); font-size: 12px }
-.cleanup li::before { content: "0" counter(cleanup); color: var(--paper); font: 700 11px var(--pixel) }.cleanup li b { color: var(--tx); font-weight: 600 }
+.cleanup-progress { display: grid; grid-template-columns: 1fr auto; gap: 7px 16px; align-items: center; margin-bottom: 5px; color: var(--faint); font: 9px var(--pixel); letter-spacing: .09em; text-transform: uppercase }
+.cleanup-progress b { color: var(--paper); font-weight: 400 }
+.cleanup-progress > i { grid-column: 1 / -1; display: block; height: 2px; background: var(--hair); overflow: hidden }
+.cleanup-progress > i > i { display: block; width: 0; height: 100%; background: var(--paper); transition: width .55s var(--flow) }
+.cleanup ol { list-style: none }
+.cleanup-task { display: flex; align-items: center; gap: 12px; min-height: 64px; border-top: 1px solid var(--hair-soft); color: var(--dim); font-size: 12px; transition: opacity .25s var(--flow) }
+.cleanup-task label { min-width: 0; flex: 1; display: flex; align-items: center; gap: 13px; padding: 12px 0; cursor: pointer }
+.cleanup-task input { appearance: none; position: absolute; width: 1px; height: 1px; flex: none; padding: 0; margin: 0; border: 0; opacity: 0; pointer-events: none }
+.cleanup-check { flex: none; width: 24px; height: 24px; display: grid; place-items: center; border: 1px solid var(--hair); color: transparent; font: 700 11px var(--pixel); transition: background .25s, color .25s, border-color .25s }
+.cleanup-task input:focus-visible + .cleanup-check { outline: 2px solid var(--paper); outline-offset: 3px }
+.cleanup-task input:checked + .cleanup-check { background: var(--paper); border-color: var(--paper); color: var(--ink) }
+.cleanup-copy { min-width: 0; display: block }
+.cleanup-copy b { display: block; color: var(--tx); font-weight: 600 }
+.cleanup-copy small { display: block; margin-top: 2px; color: var(--faint); font-size: 10px }
+.cleanup-task.is-done .cleanup-copy { opacity: .42; text-decoration: line-through }
+.task-link { flex: none; color: var(--dim); border: 1px solid var(--hair); padding: 5px 8px; text-decoration: none; font: 10px var(--pixel); transition: color .25s, border-color .25s, background .25s }
+.task-link:hover { color: var(--ink); border-color: var(--paper); background: var(--paper) }
 
 /* ---------- ценность и жизненные сценарии ---------- */
 .value-layout { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(320px, .95fr); gap: clamp(52px, 9vw, 118px); align-items: start }
@@ -508,6 +584,26 @@ header .note { opacity: 0; animation: fadeUp .9s var(--flow) .86s forwards }
 .source-link:hover { color: var(--paper); border-color: var(--paper) }.source-link span:last-child { margin-left: 5px }
 
 /* ---------- манифест ---------- */
+.trust-board { padding: clamp(28px, 5vw, 56px); overflow: hidden }
+.trust-intro { display: grid; grid-template-columns: 165px minmax(0, 1.3fr) minmax(240px, .7fr); gap: clamp(24px, 5vw, 66px); align-items: start }
+.trust-intro .kicker { margin: 7px 0 0 }
+.trust-intro h2 { margin: 0; font-size: clamp(25px, 3.5vw, 38px) }
+.trust-intro h2 span:last-child { color: var(--dim) }
+.trust-intro p { color: var(--dim); font-size: 12px; padding-top: 5px }
+.control-handoff { display: grid; grid-template-columns: 1fr 90px 1fr; align-items: stretch; margin-top: clamp(42px, 7vw, 72px); border-top: 1px solid var(--hair); border-bottom: 1px solid var(--hair) }
+.control-side { padding: 25px 2px }
+.control-side > span { color: var(--paper); font: 700 10px var(--pixel); letter-spacing: .12em }
+.control-side ol { list-style: none; counter-reset: trust; margin-top: 17px }
+.control-side li { counter-increment: trust; display: grid; grid-template-columns: 28px 1fr; gap: 8px; padding: 8px 0; color: var(--dim); font-size: 12px }
+.control-side li::before { content: "0" counter(trust); color: var(--faint); font: 9px var(--pixel) }
+.control-side.is-user > span { display: inline-block; background: var(--paper); color: var(--ink); padding: 3px 7px }
+.control-side.is-user li { color: var(--tx) }
+.handoff-mark { position: relative; display: grid; place-items: center }
+.handoff-mark i { position: absolute; left: 8px; right: 8px; height: 1px; background: repeating-linear-gradient(90deg, var(--hair) 0 4px, transparent 4px 8px) }
+.handoff-mark b { position: relative; padding: 6px 8px; background: var(--ink); color: var(--paper); font: 16px var(--pixel) }
+.trust-foot { display: flex; justify-content: center; flex-wrap: wrap; gap: 9px 16px; padding-top: 20px; color: var(--faint); font: 8px var(--pixel); letter-spacing: .1em; text-transform: uppercase }
+.trust-foot i { width: 1px; height: 10px; background: var(--hair) }
+
 .mission-card { padding: clamp(30px, 6vw, 72px); display: grid; grid-template-columns: 190px 1fr; gap: clamp(34px, 7vw, 92px); align-items: center; overflow: hidden }
 .mission-card h2 { font-size: clamp(28px, 4.5vw, 50px); line-height: 1.18; margin-bottom: 26px }
 .mission-card p { color: var(--dim); max-width: 62ch; font-size: 13px }
@@ -598,7 +694,7 @@ dialog textarea { width: 100%; margin: 16px 0; resize: vertical; font-size: 12px
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition-duration: .01ms !important }
   html { scroll-behavior: auto }
-  .js .rv, .js .stg > *, .lead, .scan, header .note, .demo, .hero-outcomes, .signal-board, .scrollhint, .ticker { opacity: 1 !important; transform: none !important }
+  .js .rv, .js .stg > *, .lead, .scan-purpose, .scan, header .note, .demo, .hero-outcomes, .signal-board, .scrollhint, .ticker { opacity: 1 !important; transform: none !important }
   .hw i { transform: none !important }
   h1 .go { color: var(--faint) }
   h1 .go::after { display: none }
@@ -619,6 +715,8 @@ dialog textarea { width: 100%; margin: 16px 0; resize: vertical; font-size: 12px
   .moment-grid { grid-template-columns: 1fr }
   .moment-card { min-height: 220px }
   .mission-card { grid-template-columns: 130px 1fr }
+  .trust-intro { grid-template-columns: 1fr 1fr }
+  .trust-intro .kicker { grid-column: 1 / -1 }
 }
 
 @media (max-width: 620px) {
@@ -629,6 +727,7 @@ dialog textarea { width: 100%; margin: 16px 0; resize: vertical; font-size: 12px
   .lead { margin: 22px 0 28px }
   .scan { display: grid; grid-template-columns: 1fr; padding: 7px }
   .scan input, .scan button { width: 100% }
+  .intent-options { grid-template-columns: 1fr 1fr }
   .hero-outcomes { gap: 9px 16px; margin-top: 32px }
   .hero-outcomes span + span::before { margin-right: 16px }
   .scrollhint { display: none }
@@ -649,11 +748,31 @@ dialog textarea { width: 100%; margin: 16px 0; resize: vertical; font-size: 12px
   .coverage-grid { grid-template-columns: repeat(2, 1fr) }
   .cleanup-head { align-items: stretch; flex-direction: column }
   .visibility { text-align: left }
+  .dossier-grid { grid-template-columns: 1fr }
+  .dossier-score { border-top: 1px solid var(--hair); border-left: 0 }
+  .dossier-facts { grid-template-columns: 1fr 1fr }
+  .dossier-facts > div:first-child { grid-column: 1 / -1 }
+  .dossier-facts > div:nth-child(2) { border-left: 0; border-top: 1px solid var(--hair) }
+  .dossier-facts > div:nth-child(3) { border-top: 1px solid var(--hair) }
+  .trust-intro { grid-template-columns: 1fr }
+  .trust-intro .kicker { grid-column: auto }
+  .control-handoff { grid-template-columns: 1fr }
+  .handoff-mark { min-height: 54px }
+  .handoff-mark i { left: 0; right: 0 }
+  .handoff-mark b { transform: rotate(90deg) }
+}
+
+@media (max-width: 380px) {
+  .intent-options { grid-template-columns: 1fr }
+  .report-actions > * { width: 100% }
 }
 
 @media print {
   body { background: #fff; color: #000; font-family: ui-monospace, monospace }
-  nav, header, .ticker, #value, #coverage, #problem, #how, #result, #mission, .final, footer, .report-actions, .rcta, .filters { display: none !important }
-  #report { display: block !important; padding: 0 }.wrap { max-width: none; padding: 0 }.glass, .rows, .cleanup { color: #000; background: #fff; border-color: #000; box-shadow: none }
+  .aurora, #trace, .grain, .scan-lines { display: none !important }
+  nav, header, .ticker, #value, #coverage, #problem, #how, #result, #trust, #mission, .final, footer, .report-actions, .rcta, .filters { display: none !important }
+  #report { display: block !important; padding: 0 }.wrap { max-width: none; padding: 0 }.glass, .rows, .cleanup, .stranger-view { color: #000; background: #fff; border-color: #000; box-shadow: none }
+  #report[hidden] { display: none !important }
   .counts > div:first-child { background: #000; color: #fff }.counts > div:first-child b, .counts > div:first-child small { color: #fff }.note, .row .det, .cleanup li, .visibility { color: #333 }
+  .dossier-topline { background: #000; color: #fff }.dossier-score, .dossier-facts, .dossier-facts > div { border-color: #000 }.dossier-score b, .dossier-story h3 b, .dossier-facts b { color: #000 }
 }

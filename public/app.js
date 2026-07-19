@@ -188,6 +188,59 @@ const openLetter = (src, url, q) => {
 const rows = $('#rows'), report = $('#report'), go = $('#go'), q = $('#q');
 let n = { found: 0, free: 0, unknown: 0 }, t0 = 0, timer = 0, es = null, foundHits = [];
 let lastScanMeta = null, reportMode = null, noteState = 'hero', lastErrorMessage = '';
+let selectedIntent = 'general', activeIntent = 'general', activeQuery = '', insightsReady = false;
+let completedTasks = new Set(), demoTimers = [], runId = 0;
+
+const INTENT_PRIORITY = {
+  general: ['soc', 'risk', 'dev', 'work', 'blog', 'media', 'game', 'link', 'infra'],
+  career: ['work', 'dev', 'blog', 'media', 'soc', 'link', 'game', 'risk', 'infra'],
+  public: ['media', 'blog', 'soc', 'link', 'work', 'dev', 'game', 'risk', 'infra'],
+  reset: ['soc', 'blog', 'media', 'game', 'risk', 'dev', 'work', 'link', 'infra']
+};
+
+const safeHttpUrl = value => {
+  if (!value) return '';
+  try {
+    const url = new URL(value);
+    return ['http:', 'https:'].includes(url.protocol) ? url.href : '';
+  } catch { return ''; }
+};
+const sourceText = hit => hit.srcKey ? t(hit.srcKey) : String(hit.src || '');
+const detailText = hit => hit.detailKey ? t(hit.detailKey) : String(hit.detail || '');
+const maskTarget = (value, kind = '') => {
+  const text = String(value || '').trim();
+  if (!text) return '—';
+  if (kind === 'email' || text.includes('@')) {
+    const [name, domain] = text.split('@');
+    return `${name.slice(0, Math.min(2, name.length)) || '*'}***@${domain || '***'}`;
+  }
+  if (kind === 'domain') {
+    try { return new URL(text.includes('://') ? text : `https://${text}`).hostname.replace(/^www\./, ''); } catch {}
+  }
+  if (text.length <= 3) return text[0] + '**';
+  return `${text.slice(0, 2)}***${text.slice(-1)}`;
+};
+
+const syncIntentControl = () => {
+  $$('input[name="intent"]').forEach(input => {
+    input.checked = input.value === selectedIntent;
+    input.closest('.intent-option')?.classList.toggle('is-active', input.checked);
+  });
+  $('#intent-state').textContent = t(`intent.${selectedIntent}Context`);
+};
+const setIntent = intent => {
+  if (!INTENT_PRIORITY[intent]) return;
+  selectedIntent = intent;
+  syncIntentControl();
+};
+$('#scan-purpose').addEventListener('change', event => {
+  if (event.target.matches('input[name="intent"]')) setIntent(event.target.value);
+});
+$$('.moment-card[data-intent]').forEach(card => card.addEventListener('click', () => {
+  setIntent(card.dataset.intent);
+  setTimeout(() => q.focus({ preventScroll: true }), 350);
+}));
+syncIntentControl();
 
 /* Карта в первом экране реагирует на цель, но не имитирует запущенное сканирование. */
 const signalBoard = $('.signal-board'), signalState = $('#signal-state span'), signalQuery = $('#signal-query');
@@ -209,42 +262,177 @@ const setNum = (el, v) => {
   el.textContent = v;
   el.classList.remove('hit'); void el.offsetWidth; el.classList.add('hit');
 };
+const countForm = count => {
+  if (currentLanguage() === 'en') return count === 1 ? 'one' : 'many';
+  const mod10 = count % 10, mod100 = count % 100;
+  if (mod10 === 1 && mod100 !== 11) return 'one';
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'few';
+  return 'many';
+};
+const renderCtaTail = () => { $('#rcta-tail').textContent = t(`report.nextTitle.${countForm(n.found)}`); };
 const setCounts = () => {
   setNum($('#c-found'), n.found);
   setNum($('#c-free'), n.free);
   setNum($('#c-unknown'), n.unknown);
   $('#ctan').textContent = n.found;
+  renderCtaTail();
 };
 
 const addRow = h => {
   const el = document.createElement('div');
   el.className = 'row' + (h.state === 'found' ? ' is-found' : '');
-  const name = h.url ? `<a href="${h.url}" target="_blank" rel="noopener noreferrer">${h.src}</a>` : h.src;
-  el.innerHTML = `
-    <div><div class="src">${name}</div>${h.detail ? `<div class="det"${h.detailKey ? ` data-detail-key="${h.detailKey}"` : ''}>${h.detailKey ? t(h.detailKey) : h.detail}</div>` : ''}</div>
-    <div class="cat" data-cat="${h.cat}">${CAT[h.cat] || ''}</div>
-    <div class="stw"><span class="st ${h.state}" data-state="${h.state}">${ST[h.state]}</span></div>`;
+  const info = document.createElement('div');
+  const src = document.createElement('div');
+  src.className = 'src';
+  const url = safeHttpUrl(h.url);
+  const source = sourceText(h);
+  const sourceNode = url ? document.createElement('a') : document.createElement('span');
+  sourceNode.textContent = source;
+  if (h.srcKey) sourceNode.dataset.srcKey = h.srcKey;
+  if (url) { sourceNode.href = url; sourceNode.target = '_blank'; sourceNode.rel = 'noopener noreferrer'; }
+  src.append(sourceNode); info.append(src);
+  if (h.detail || h.detailKey) {
+    const detail = document.createElement('div');
+    detail.className = 'det'; detail.textContent = detailText(h);
+    if (h.detailKey) detail.dataset.detailKey = h.detailKey;
+    info.append(detail);
+  }
+  const category = document.createElement('div');
+  category.className = 'cat'; category.dataset.cat = h.cat; category.textContent = CAT[h.cat] || '';
+  const stateWrap = document.createElement('div'); stateWrap.className = 'stw';
+  const state = document.createElement('span');
+  state.className = `st ${h.state}`; state.dataset.state = h.state; state.textContent = ST[h.state];
+  stateWrap.append(state); el.append(info, category, stateWrap);
   if (h.state === 'found' && h.type === 'account') {
     const b = document.createElement('button');
     b.className = 'act'; b.textContent = t('report.request');
-    b.onclick = () => openLetter(h.src, h.url, q.value.trim());
+    b.onclick = () => openLetter(sourceText(h), url, activeQuery);
     el.append(b);
   }
   // найденные — наверх: жюри видит следы, а не список «чисто»
   if (h.state === 'found') { foundHits.push(h); rows.prepend(el); } else rows.append(el);
 };
 
+const rankedFoundHits = () => {
+  const priority = INTENT_PRIORITY[activeIntent] || INTENT_PRIORITY.general;
+  return [...foundHits].sort((a, b) => {
+    const categoryDelta = (priority.indexOf(a.cat) < 0 ? 99 : priority.indexOf(a.cat)) - (priority.indexOf(b.cat) < 0 ? 99 : priority.indexOf(b.cat));
+    return categoryDelta || sourceText(a).localeCompare(sourceText(b), currentLanguage());
+  });
+};
+
+const deriveReportModel = () => {
+  const categories = [...new Set(foundHits.map(hit => hit.cat).filter(Boolean))];
+  const volume = Math.min(n.found, 6) / 6 * 60;
+  const breadth = Math.min(categories.length, 4) / 4 * 40;
+  const score = Math.round(volume + breadth);
+  const grade = score >= 70 ? 'open' : score >= 35 ? 'visible' : 'quiet';
+  return {
+    intent: activeIntent,
+    target: activeQuery,
+    maskedTarget: maskTarget(activeQuery, reportMode === 'demo' ? 'username' : lastScanMeta?.kind),
+    score, grade, categories,
+    checked: n.found + n.free + n.unknown,
+    found: n.found, unknown: n.unknown,
+    hits: rankedFoundHits()
+  };
+};
+
+const renderDossier = model => {
+  const panel = $('#stranger-view');
+  panel.hidden = false;
+  const viewer = t(`stranger.role.${model.intent}`);
+  $('#dossier-mode').textContent = `VIEW / ${t(`intent.${model.intent}`).toUpperCase()}`;
+  $('#dossier-lens').textContent = viewer;
+  $('#stranger-score').textContent = model.score;
+  $('#stranger-grade').textContent = t(`report.${model.grade}`);
+  $('.dossier-score').setAttribute('aria-label', t('stranger.scoreAriaValue', { score: model.score, grade: t(`report.${model.grade}`) }));
+  $('#dossier-target').textContent = model.maskedTarget;
+  $('#dossier-found').textContent = `${model.found}/${model.checked}`;
+  $('#dossier-categories').textContent = model.categories.length;
+
+  const topSource = model.hits[0] ? sourceText(model.hits[0]) : '';
+  const summaryKey = !model.found ? 'empty' : model.score >= 70 ? 'high' : model.score >= 35 ? 'medium' : 'quiet';
+  $('#dossier-summary').textContent = t(`stranger.summary.${summaryKey}`, {
+    viewer, count: model.found, source: topSource
+  });
+
+  const sourceList = $('#dossier-sources');
+  sourceList.replaceChildren();
+  const sources = [...new Set(model.hits.map(sourceText))].slice(0, 5);
+  (sources.length ? sources : [t('stranger.noMatches')]).forEach(name => {
+    const chip = document.createElement('span'); chip.textContent = name; sourceList.append(chip);
+  });
+};
+
+const cleanupTasks = model => {
+  const tasks = model.hits.slice(0, 3).map((hit, index) => ({
+    id: `hit-${index}`,
+    title: t(index === 0 ? 'cleanup.firstTitle' : 'cleanup.hitTitle', { source: sourceText(hit) }),
+    detail: t(`cleanup.reason.${model.intent}`, { category: CAT[hit.cat] || hit.cat }),
+    url: safeHttpUrl(hit.url)
+  }));
+  const universal = [
+    { id: 'intent', title: t(`cleanup.intent.${model.intent}Title`), detail: t(`cleanup.intent.${model.intent}Text`) },
+    { id: 'privacy', title: t('cleanup.privacyTitle'), detail: t('cleanup.privacyText') },
+    { id: 'decide', title: t('cleanup.decideTitle'), detail: t('cleanup.decideText') },
+    { id: 'aliases', title: t('cleanup.aliasesTitle'), detail: t('cleanup.aliasesText') }
+  ];
+  for (const task of universal) if (tasks.length < 4) tasks.push(task);
+  tasks.push({ id: 'rescan', title: t('cleanup.rescanTitle'), detail: t('cleanup.rescanText') });
+  return tasks.slice(0, 5);
+};
+
+let visibleTasks = [];
+const renderCleanupProgress = () => {
+  const done = visibleTasks.filter(task => completedTasks.has(task.id)).length;
+  const total = visibleTasks.length;
+  $('#cleanup-progress').textContent = `${done}/${total}`;
+  $('#cleanup-progress-bar').style.width = (total ? done / total * 100 : 0) + '%';
+};
+const renderChecklist = model => {
+  visibleTasks = cleanupTasks(model);
+  const list = $('#cleanup-list'); list.replaceChildren();
+  visibleTasks.forEach((task, index) => {
+    const item = document.createElement('li'); item.className = 'cleanup-task';
+    item.classList.toggle('is-done', completedTasks.has(task.id)); item.dataset.taskId = task.id;
+    const label = document.createElement('label');
+    const input = document.createElement('input'); input.type = 'checkbox'; input.checked = completedTasks.has(task.id);
+    input.dataset.taskId = task.id;
+    const check = document.createElement('span'); check.className = 'cleanup-check'; check.textContent = '✓'; check.setAttribute('aria-hidden', 'true');
+    const copy = document.createElement('span'); copy.className = 'cleanup-copy';
+    const title = document.createElement('b'); title.textContent = `${String(index + 1).padStart(2, '0')} · ${task.title}`;
+    const detail = document.createElement('small'); detail.textContent = task.detail;
+    copy.append(title, detail); label.append(input, check, copy); item.append(label);
+    if (task.url) {
+      const link = document.createElement('a'); link.className = 'task-link'; link.href = task.url;
+      link.target = '_blank'; link.rel = 'noopener noreferrer'; link.textContent = '↗';
+      link.setAttribute('aria-label', t('cleanup.open', { source: task.title })); item.append(link);
+    }
+    list.append(item);
+  });
+  renderCleanupProgress();
+};
+
+$('#cleanup-list').addEventListener('change', event => {
+  const input = event.target.closest('input[data-task-id]');
+  if (!input) return;
+  if (input.checked) completedTasks.add(input.dataset.taskId); else completedTasks.delete(input.dataset.taskId);
+  input.closest('.cleanup-task')?.classList.toggle('is-done', input.checked);
+  renderCleanupProgress();
+});
+
 const renderCompletion = () => {
-  $('#rcta').hidden = n.found === 0;
+  insightsReady = true;
+  const model = deriveReportModel();
+  $('#rcta').hidden = model.found === 0;
   $('#report-actions').hidden = false;
-  $('#cleanup').hidden = n.found === 0;
-  if (!n.found) return;
-  const score = Math.min(100, n.found * 13 + n.unknown * 2);
-  $('#visibility-label').textContent = score > 65 ? t('report.open') : score > 30 ? t('report.visible') : t('report.quiet');
-  $('#visibility-bar').style.width = score + '%';
-  $('#cleanup-list').innerHTML = foundHits.slice(0, 3).map((h, i) =>
-    `<li><span><b>${i === 0 ? t('report.checkDelete') : t('report.prepare')} ${h.src}</b>${h.detail ? ` · ${h.detailKey ? t(h.detailKey) : h.detail}` : ''}</span></li>`
-  ).join('');
+  $('#cleanup').hidden = model.found === 0;
+  renderDossier(model);
+  if (!model.found) { visibleTasks = []; return; }
+  $('#visibility-label').textContent = `${model.score}/100 · ${t(`report.${model.grade}`)}`;
+  $('#visibility-bar').style.width = model.score + '%';
+  renderChecklist(model);
 };
 
 $('#filters').onclick = e => {
@@ -253,7 +441,30 @@ $('#filters').onclick = e => {
   rows.classList.toggle('onlyfound', e.target.dataset.f === 'found');
 };
 
-const stop = () => { es?.close(); es = null; clearInterval(timer); go.disabled = false; go.textContent = t('scan.again'); };
+const cancelActiveRun = () => {
+  runId++;
+  es?.close(); es = null; clearInterval(timer);
+  demoTimers.forEach(clearTimeout); demoTimers = [];
+  go.disabled = false;
+};
+const stop = currentRun => {
+  if (currentRun !== runId) return;
+  es?.close(); es = null; clearInterval(timer);
+  go.disabled = false; go.textContent = t('scan.again');
+};
+const resetReport = () => {
+  rows.replaceChildren(); rows.classList.add('onlyfound'); rows.dataset.empty = t('report.waiting');
+  $$('.chip').forEach(chip => chip.classList.toggle('on', chip.dataset.f === 'found'));
+  n = { found: 0, free: 0, unknown: 0 }; foundHits = []; completedTasks.clear(); visibleTasks = [];
+  insightsReady = false;
+  ['#c-found', '#c-free', '#c-unknown'].forEach(selector => ($(selector).textContent = '0'));
+  $('#c-time').textContent = '0.0'; $('#ctan').textContent = '0';
+  report.hidden = false; $('.counts').classList.add('vis');
+  $('#rcta').hidden = true; $('#cleanup').hidden = true; $('#stranger-view').hidden = true; $('#report-actions').hidden = true;
+  $('#rnote').textContent = ''; $('#cleanup-list').replaceChildren();
+  $('#cleanup-progress').textContent = '0/0'; $('#cleanup-progress-bar').style.width = '0%';
+  $('#arc').style.strokeDashoffset = 276.5; $('#pct').textContent = '0%';
+};
 
 const renderReportTitle = () => {
   if (reportMode === 'demo') $('#rtitle').textContent = t('demo.title');
@@ -262,7 +473,7 @@ const renderReportTitle = () => {
 
 const renderNote = () => {
   if (noteState === 'running') $('#note').textContent = t('scan.wait');
-  else if (noteState === 'doneFound') $('#note').textContent = t('scan.doneFound', { count: n.found });
+  else if (noteState === 'doneFound') $('#note').textContent = t(`scan.doneFound.${countForm(n.found)}`, { count: n.found });
   else if (noteState === 'doneEmpty') $('#note').textContent = t('scan.doneEmpty');
   else if (noteState === 'error') $('#note').textContent = lastErrorMessage || t('scan.connection');
   else if (noteState === 'hero') $('#note').textContent = t('hero.note');
@@ -273,20 +484,11 @@ $('#scan').onsubmit = e => {
   const val = q.value.trim();
   if (!val) return;
 
-  es?.close(); clearInterval(timer);
-  rows.innerHTML = ''; rows.classList.add('onlyfound');
-  $$('.chip').forEach(c => c.classList.toggle('on', c.dataset.f === 'found'));
-  n = { found: 0, free: 0, unknown: 0 };
-  foundHits = [];
-  reportMode = 'scan'; lastScanMeta = null;
-  ['#c-found', '#c-free', '#c-unknown'].forEach(s => ($(s).textContent = '0'));
-  $('#ctan').textContent = '0';
-  report.hidden = false;
-  $('.counts').classList.add('vis');   // плитки выезжают по очереди
-  $('#rcta').hidden = true; $('#cleanup').hidden = true; $('#report-actions').hidden = true; $('#rnote').textContent = '';
+  cancelActiveRun(); const currentRun = runId; let finished = false;
+  activeIntent = selectedIntent; activeQuery = val;
+  reportMode = 'scan'; lastScanMeta = null; resetReport();
   noteState = 'running'; $('#note').className = 'note'; renderNote();
   go.disabled = true; go.textContent = t('scan.running');
-  $('#arc').style.strokeDashoffset = 276.5; $('#pct').textContent = '0%';
   report.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   t0 = performance.now();
@@ -295,23 +497,30 @@ $('#scan').onsubmit = e => {
   es = new EventSource('/api/scan?q=' + encodeURIComponent(val) + '&lang=' + currentLanguage());
 
   es.addEventListener('start', ev => {
+    if (currentRun !== runId) return;
     const d = JSON.parse(ev.data);
     lastScanMeta = d; renderReportTitle();
   });
-  es.addEventListener('hit', ev => { const h = JSON.parse(ev.data); n[h.state]++; setCounts(); addRow(h); });
+  es.addEventListener('hit', ev => {
+    if (currentRun !== runId) return;
+    const h = JSON.parse(ev.data); n[h.state]++; setCounts(); addRow(h);
+  });
   es.addEventListener('progress', ev => {
+    if (currentRun !== runId) return;
     const d = JSON.parse(ev.data), p = d.done / d.total;
     $('#arc').style.strokeDashoffset = 276.5 * (1 - p);
     $('#pct').textContent = Math.round(p * 100) + '%';
   });
-  es.addEventListener('note', ev => ($('#rnote').textContent = JSON.parse(ev.data).msg));
+  es.addEventListener('note', ev => { if (currentRun === runId) $('#rnote').textContent = JSON.parse(ev.data).msg; });
   es.addEventListener('error', ev => {
+    if (currentRun !== runId || finished) return;
     const msg = ev.data ? JSON.parse(ev.data).msg : t('scan.connection');
     noteState = 'error'; lastErrorMessage = msg; $('#note').className = 'note err'; renderNote();
-    stop();
+    stop(currentRun);
   });
   es.addEventListener('done', () => {
-    stop();
+    if (currentRun !== runId) return;
+    finished = true; stop(currentRun);
     $('#c-time').textContent = ((performance.now() - t0) / 1000).toFixed(1) + t('time.unit');
     renderCompletion();
     $('#note').className = 'note';
@@ -320,6 +529,82 @@ $('#scan').onsubmit = e => {
 };
 
 $('#export-report').onclick = () => window.print();
+
+const fitCanvasText = (ctx, value, maxWidth) => {
+  const text = String(value || '');
+  if (ctx.measureText(text).width <= maxWidth) return text;
+  let short = text;
+  while (short.length > 1 && ctx.measureText(short + '…').width > maxWidth) short = short.slice(0, -1);
+  return short + '…';
+};
+const downloadResultCard = event => {
+  if (!insightsReady) { event.preventDefault(); return; }
+  const model = deriveReportModel();
+  const canvas = document.createElement('canvas'); canvas.width = 1200; canvas.height = 630;
+  const ctx = canvas.getContext('2d');
+  const light = document.documentElement.dataset.theme === 'light';
+  const bg = light ? '#f5f5f2' : '#0a0a0b';
+  const fg = light ? '#101011' : '#ffffff';
+  const dim = light ? '#67676b' : '#8b8b8f';
+  const hair = light ? 'rgba(16,16,17,.16)' : 'rgba(255,255,255,.14)';
+  const pixel = 'Monocraft, ui-monospace, monospace';
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = hair; ctx.lineWidth = 1;
+  for (let x = 32; x < canvas.width; x += 32) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke(); }
+  for (let y = 32; y < canvas.height; y += 32) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke(); }
+  ctx.fillStyle = bg; ctx.fillRect(32, 32, 1136, 566);
+  ctx.strokeStyle = fg; ctx.lineWidth = 2; ctx.strokeRect(32, 32, 1136, 566);
+
+  ctx.fillStyle = fg; ctx.font = `700 25px ${pixel}`; ctx.fillText('TRACE', 64, 80);
+  const traceWidth = ctx.measureText('TRACE').width;
+  ctx.fillStyle = fg; ctx.fillRect(64 + traceWidth + 5, 56, 92, 31);
+  ctx.fillStyle = bg; ctx.fillText('ERASE', 64 + traceWidth + 10, 80);
+  ctx.fillStyle = dim; ctx.font = `400 16px ${pixel}`;
+  const date = new Intl.DateTimeFormat(currentLanguage() === 'en' ? 'en-GB' : 'ru-RU').format(new Date());
+  ctx.textAlign = 'right'; ctx.fillText(`${reportMode === 'demo' ? t('card.demo') + ' · ' : ''}${date}`, 1136, 78); ctx.textAlign = 'left';
+  ctx.strokeStyle = hair; ctx.beginPath(); ctx.moveTo(64, 112); ctx.lineTo(1136, 112); ctx.stroke();
+
+  ctx.fillStyle = dim; ctx.font = `400 14px ${pixel}`; ctx.fillText(t('card.publicView').toUpperCase(), 64, 154);
+  ctx.fillStyle = fg; ctx.font = `700 45px ${pixel}`;
+  ctx.fillText(fitCanvasText(ctx, model.maskedTarget, 680), 64, 209);
+  ctx.fillStyle = dim; ctx.font = `400 15px ${pixel}`;
+  ctx.fillText(`${t('card.intent')}: ${t(`intent.${model.intent}`)} · ${t(`stranger.role.${model.intent}`)}`, 64, 248);
+
+  ctx.fillStyle = dim; ctx.font = `400 13px ${pixel}`; ctx.fillText(t('card.visibility').toUpperCase(), 866, 151);
+  ctx.fillStyle = fg; ctx.font = `700 92px ${pixel}`; ctx.fillText(String(model.score), 858, 235);
+  const scoreWidth = ctx.measureText(String(model.score)).width;
+  ctx.fillStyle = dim; ctx.font = `400 19px ${pixel}`; ctx.fillText('/100', 866 + scoreWidth, 232);
+  ctx.fillStyle = fg; ctx.font = `400 14px ${pixel}`; ctx.fillText(t(`report.${model.grade}`).toUpperCase(), 866, 270);
+
+  ctx.strokeStyle = hair; ctx.beginPath(); ctx.moveTo(64, 312); ctx.lineTo(1136, 312); ctx.stroke();
+  const done = visibleTasks.filter(task => completedTasks.has(task.id)).length;
+  const facts = [
+    [t('card.matches'), `${model.found}/${model.checked}`],
+    [t('card.categories'), String(model.categories.length)],
+    [t('cleanup.progress'), `${done}/${visibleTasks.length}`]
+  ];
+  facts.forEach(([label, value], index) => {
+    const x = 64 + index * 210;
+    ctx.fillStyle = dim; ctx.font = `400 12px ${pixel}`; ctx.fillText(label.toUpperCase(), x, 354);
+    ctx.fillStyle = fg; ctx.font = `700 31px ${pixel}`; ctx.fillText(value, x, 393);
+  });
+
+  ctx.fillStyle = dim; ctx.font = `400 12px ${pixel}`; ctx.fillText(t('card.review').toUpperCase(), 704, 354);
+  const sourceNames = [...new Set(model.hits.map(sourceText))].slice(0, 3);
+  ctx.fillStyle = fg; ctx.font = `400 18px ${pixel}`;
+  (sourceNames.length ? sourceNames : [t('stranger.noMatches')]).forEach((source, index) => {
+    ctx.fillText(`${String(index + 1).padStart(2, '0')}  ${fitCanvasText(ctx, source, 390)}`, 704, 391 + index * 34);
+  });
+
+  ctx.strokeStyle = hair; ctx.beginPath(); ctx.moveTo(64, 536); ctx.lineTo(1136, 536); ctx.stroke();
+  ctx.fillStyle = dim; ctx.font = `400 12px ${pixel}`;
+  ctx.fillText(t('card.note'), 64, 572);
+  ctx.textAlign = 'right'; ctx.fillText('traceerase · public view', 1136, 572); ctx.textAlign = 'left';
+
+  event.currentTarget.href = canvas.toDataURL('image/png');
+  event.currentTarget.download = `traceerase-public-view-${Date.now()}.png`;
+};
+$('#download-card').onclick = downloadResultCard;
 
 const eraseRange = $('#erase-range');
 eraseRange.oninput = () => {
@@ -331,24 +616,26 @@ eraseRange.oninput = () => {
 const demoHits = () => [
   { type: 'account', src: 'GitHub', cat: 'dev', url: 'https://github.com/demo-user', state: 'found', detail: t('demo.publicRepos'), detailKey: 'demo.publicRepos' },
   { type: 'account', src: 'Telegram', cat: 'soc', url: 'https://t.me/demo_user', state: 'found', detail: t('demo.publicProfile'), detailKey: 'demo.publicProfile' },
-  { type: 'leak', src: t('demo.archive'), cat: 'risk', state: 'found', detail: t('demo.oldMention'), detailKey: 'demo.oldMention' },
+  { type: 'leak', src: t('demo.archive'), srcKey: 'demo.archive', cat: 'risk', state: 'found', detail: t('demo.oldMention'), detailKey: 'demo.oldMention' },
   { type: 'account', src: 'Codeforces', cat: 'game', url: 'https://codeforces.com/profile/demo-user', state: 'free' }
 ];
 $('#demo').onclick = () => {
+  cancelActiveRun(); const currentRun = runId;
   const demoItems = demoHits();
-  es?.close(); clearInterval(timer); rows.innerHTML = ''; rows.classList.add('onlyfound'); foundHits = [];
-  reportMode = 'demo'; lastScanMeta = null; noteState = 'hero';
-  n = { found: 0, free: 0, unknown: 0 }; setCounts(); report.hidden = false; $('.counts').classList.add('vis');
-  renderReportTitle(); $('#rcta').hidden = true; $('#cleanup').hidden = true; $('#report-actions').hidden = true;
-  $('#arc').style.strokeDashoffset = 276.5; $('#pct').textContent = '0%'; report.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  demoItems.forEach((h, i) => setTimeout(() => {
+  activeIntent = selectedIntent; activeQuery = 'demo-user';
+  reportMode = 'demo'; lastScanMeta = null; noteState = 'hero'; resetReport(); setCounts();
+  renderReportTitle(); report.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  demoItems.forEach((h, i) => demoTimers.push(setTimeout(() => {
+    if (currentRun !== runId) return;
     n[h.state]++; setCounts(); addRow(h); const progress = (i + 1) / demoItems.length;
     $('#arc').style.strokeDashoffset = 276.5 * (1 - progress); $('#pct').textContent = Math.round(progress * 100) + '%';
     if (i === demoItems.length - 1) { $('#c-time').textContent = '2.1' + t('time.unit'); renderCompletion(); $('#rnote').textContent = t('demo.note'); }
-  }, i * 330));
+  }, i * 330)));
 };
 
 document.addEventListener('traceerase:languagechange', () => {
+  syncIntentControl();
+  renderCtaTail();
   updateSignalBoard();
   renderCoverage();
   renderReportTitle();
@@ -357,8 +644,10 @@ document.addEventListener('traceerase:languagechange', () => {
   $$('.row .cat[data-cat]').forEach(element => { element.textContent = CAT[element.dataset.cat]; });
   $$('.row .st[data-state]').forEach(element => { element.textContent = ST[element.dataset.state]; });
   $$('.row .act').forEach(element => { element.textContent = t('report.request'); });
+  $$('[data-src-key]').forEach(element => { element.textContent = t(element.dataset.srcKey); });
   $$('[data-detail-key]').forEach(element => { element.textContent = t(element.dataset.detailKey); });
-  if (!$('#cleanup').hidden) renderCompletion();
+  rows.dataset.empty = t('report.waiting');
+  if (insightsReady) renderCompletion();
   if (reportMode === 'demo') $('#rnote').textContent = t('demo.note');
   eraseRange.oninput();
 });

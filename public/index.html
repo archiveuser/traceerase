@@ -80,6 +80,17 @@
 
     <p class="lead" data-i18n="hero.lead">TraceErase собирает разбросанные публичные профили в одну карту — чтобы ты увидел свой цифровой след и решил, что оставить, а что закрыть.</p>
 
+    <fieldset class="scan-purpose" id="scan-purpose">
+      <legend class="sr-only" data-i18n="intent.aria">Выбери цель проверки</legend>
+      <div class="scan-purpose-head"><span data-i18n="intent.label">Цель проверки</span><b id="intent-state" data-i18n="intent.generalContext">общая картина</b></div>
+      <div class="intent-options">
+        <label class="intent-option is-active"><input type="radio" name="intent" value="general" checked><span>01</span><b data-i18n="intent.general">Обзор</b></label>
+        <label class="intent-option"><input type="radio" name="intent" value="career"><span>02</span><b data-i18n="intent.career">Карьера</b></label>
+        <label class="intent-option"><input type="radio" name="intent" value="public"><span>03</span><b data-i18n="intent.public">Публичность</b></label>
+        <label class="intent-option"><input type="radio" name="intent" value="reset"><span>04</span><b data-i18n="intent.reset">Новый этап</b></label>
+      </div>
+    </fieldset>
+
     <form class="scan glass" id="scan" autocomplete="off">
       <label class="sr-only" for="q" data-i18n="hero.inputLabel">Никнейм, email или домен</label>
       <input id="q" name="q" placeholder="введи никнейм, email или домен" aria-label="Никнейм, email или домен" data-i18n-placeholder="hero.inputPlaceholder" data-i18n-aria-label="hero.inputLabel" spellcheck="false" required>
@@ -110,7 +121,7 @@
           <path d="M164 70v12M164 140v12M123 111h12M193 111h12"/>
         </g>
       </svg>
-      <div class="signal-query"><span data-i18n="hero.target">цель</span><b id="signal-query" data-i18n="signal.none">не выбрана</b></div>
+      <div class="signal-query"><span data-i18n="hero.target">отправная точка</span><b id="signal-query" data-i18n="signal.none">не задана</b></div>
       <figcaption><span data-i18n="hero.profiles">профили</span><span data-i18n="hero.media">медиа</span><span data-i18n="hero.work">работа</span><span data-i18n="hero.games">игры</span></figcaption>
     </figure>
 
@@ -162,6 +173,29 @@
       <div class="glass spot" style="--i:3"><b id="c-time">0.0</b><small data-i18n="report.time">времени</small></div>
     </div>
 
+    <article class="stranger-view glass" id="stranger-view" hidden aria-live="polite">
+      <div class="dossier-topline"><span data-i18n="stranger.file">PUBLIC DOSSIER</span><b id="dossier-mode">VIEW / GENERAL</b></div>
+      <div class="dossier-grid">
+        <div class="dossier-story">
+          <div class="kicker" data-i18n="stranger.kicker">Взгляд со стороны</div>
+          <h3><span data-i18n="stranger.title">Как тебя увидит</span> <b id="dossier-lens">незнакомец</b></h3>
+          <p id="dossier-summary"></p>
+          <div class="dossier-sources"><span data-i18n="stranger.visibleAt">Заметные точки</span><div id="dossier-sources"></div></div>
+        </div>
+        <div class="dossier-score" role="img" aria-label="Индекс публичной видимости" data-i18n-aria-label="stranger.scoreAria">
+          <span data-i18n="stranger.score">Индекс видимости</span>
+          <div><b id="stranger-score">0</b><i>/100</i></div>
+          <strong id="stranger-grade">—</strong>
+          <p data-i18n="stranger.scoreNote">Ориентир по числу найденных страниц и типов источников. Это не оценка опасности.</p>
+        </div>
+      </div>
+      <div class="dossier-facts">
+        <div><span data-i18n="stranger.target">Отправная точка</span><b id="dossier-target">—</b></div>
+        <div><span data-i18n="stranger.matches">Найдено / проверено</span><b id="dossier-found">0/0</b></div>
+        <div><span data-i18n="stranger.categories">Категории</span><b id="dossier-categories">0</b></div>
+      </div>
+    </article>
+
     <div class="filters" id="filters">
       <button class="chip on" data-f="found" data-i18n="report.traces">Следы</button>
       <button class="chip" data-f="all" data-i18n="report.all">Всё</button>
@@ -172,16 +206,18 @@
 
     <div class="rcta glass" id="rcta" hidden>
       <div>
-        <h3><span data-i18n="report.foundLead">Найдено</span> <b id="ctan">0</b> <span data-i18n="report.nextTitle">следов. Что делать дальше?</span></h3>
+        <h3><span data-i18n="report.foundLead">Найдено</span> <b id="ctan">0</b> <span id="rcta-tail">следов. Что делать дальше?</span></h3>
         <p data-i18n="report.nextText">Мы собрали найденное в короткий маршрут — начни с самого заметного.</p>
       </div>
       <a class="btn mag" href="#cleanup" data-i18n="report.openRoute">Открыть маршрут →</a>
     </div>
     <div class="report-actions" id="report-actions" hidden>
-      <button class="ghostbtn" id="export-report" type="button" data-i18n="report.save">Сохранить отчёт</button>
+      <button class="ghostbtn" id="export-report" type="button" data-i18n="report.savePdf">Сохранить PDF</button>
+      <a class="btn cardbtn" id="download-card" href="#" download data-i18n="report.downloadCard">Скачать карточку</a>
     </div>
     <div class="cleanup glass" id="cleanup" hidden>
       <div class="cleanup-head"><div><div class="kicker" data-i18n="report.route">Маршрут очистки</div><h3 data-i18n="report.start">С чего начать</h3></div><div class="visibility"><span data-i18n="report.visibility">видимость</span><b id="visibility-label">—</b><i><i id="visibility-bar"></i></i></div></div>
+      <div class="cleanup-progress"><span data-i18n="cleanup.progress">Пройдено</span><b id="cleanup-progress">0/5</b><i><i id="cleanup-progress-bar"></i></i></div>
       <ol id="cleanup-list"></ol>
     </div>
   </div>
@@ -193,22 +229,22 @@
     <h2><span data-i18n="problem.title">Прошлое всплывает</span><br><span data-i18n="problem.title2">без приглашения</span></h2>
     <p class="sub" data-i18n="problem.lead">TraceErase полезен в моменты, когда хочется самому определить, какая версия тебя остаётся публичной.</p>
     <div class="moment-grid stg">
-      <a class="moment-card glass spot" href="#scan" style="--i:0">
+      <a class="moment-card glass spot" href="#scan" data-intent="career" style="--i:0">
         <span data-i18n="moment.workTag">новая работа</span><h3 data-i18n="moment.workTitle">Перед важным знакомством</h3>
         <p data-i18n="moment.workText">Посмотри, какой цифровой портрет складывается из старых профилей и публичных страниц.</p>
         <i data-i18n="moment.workAction">проверить репутационный след →</i>
       </a>
-      <a class="moment-card glass spot" href="#scan" style="--i:1">
+      <a class="moment-card glass spot" href="#scan" data-intent="public" style="--i:1">
         <span data-i18n="moment.publicTag">публичность</span><h3 data-i18n="moment.publicTitle">Перед запуском проекта</h3>
         <p data-i18n="moment.publicText">Отдели личную историю от профессиональной до того, как внимание к тебе вырастет.</p>
         <i data-i18n="moment.publicAction">собрать карту профилей →</i>
       </a>
-      <a class="moment-card glass spot" href="#scan" style="--i:2">
+      <a class="moment-card glass spot" href="#scan" data-intent="reset" style="--i:2">
         <span data-i18n="moment.resetTag">новый этап</span><h3 data-i18n="moment.resetTitle">Когда хочется начать заново</h3>
         <p data-i18n="moment.resetText">Найди забытые аккаунты и реши, какие из них больше не должны представлять тебя.</p>
         <i data-i18n="moment.resetAction">найти старые аккаунты →</i>
       </a>
-      <a class="moment-card glass spot" href="#scan" style="--i:3">
+      <a class="moment-card glass spot" href="#scan" data-intent="general" style="--i:3">
         <span data-i18n="moment.awareTag">осознанность</span><h3 data-i18n="moment.awareTitle">Просто чтобы знать</h3>
         <p data-i18n="moment.awareText">Увидь себя глазами незнакомца и верни контроль до того, как он понадобится срочно.</p>
         <i data-i18n="moment.awareAction">проверить видимость →</i>
@@ -275,6 +311,38 @@
       <div style="--i:1"><span data-i18n="result.score">Оценка</span><small data-i18n="result.scoreText">насколько профиль заметен</small></div>
       <div style="--i:2"><span data-i18n="result.links">Ссылки</span><small data-i18n="result.linksText">куда перейти прямо сейчас</small></div>
       <div style="--i:3"><span data-i18n="result.route">Маршрут</span><small data-i18n="result.routeText">с чего начать очистку</small></div>
+    </div>
+  </div>
+</section>
+
+<section id="trust">
+  <div class="wrap rv">
+    <div class="trust-board glass">
+      <div class="trust-intro">
+        <div class="kicker" data-i18n="trust.kicker">Контроль без магии</div>
+        <h2><span data-i18n="trust.title">TraceErase показывает путь.</span><br><span data-i18n="trust.title2">Последнее слово — твоё.</span></h2>
+        <p data-i18n="trust.lead">Сервис работает как навигатор по публичному цифровому следу: собирает картину и помогает перейти от находки к решению.</p>
+      </div>
+      <div class="control-handoff">
+        <div class="control-side">
+          <span>TRACEERASE</span>
+          <ol>
+            <li data-i18n="trust.finds">Находит публичные страницы</li>
+            <li data-i18n="trust.groups">Собирает совпадения в одну картину</li>
+            <li data-i18n="trust.suggests">Предлагает порядок действий</li>
+          </ol>
+        </div>
+        <div class="handoff-mark" aria-hidden="true"><i></i><b>→</b></div>
+        <div class="control-side is-user">
+          <span data-i18n="trust.you">ТЫ</span>
+          <ol>
+            <li data-i18n="trust.verify">Проверяешь совпадения</li>
+            <li data-i18n="trust.decide">Решаешь, что оставить публичным</li>
+            <li data-i18n="trust.act">Сам запускаешь нужное действие</li>
+          </ol>
+        </div>
+      </div>
+      <div class="trust-foot"><span data-i18n="trust.public">Публичные источники</span><i></i><span data-i18n="trust.local">Карточка создаётся в браузере</span><i></i><span data-i18n="trust.choice">Никаких решений за тебя</span></div>
     </div>
   </div>
 </section>
