@@ -310,10 +310,10 @@ button:disabled { background: transparent; color: var(--faint); border-color: va
 .ghostbtn:hover { background: var(--paper); color: var(--ink); border-color: var(--paper); box-shadow: none }
 .note { color: var(--dim); font-size: 12px; margin-top: 15px }
 .note.err { color: var(--paper); border-left: 2px solid var(--paper); padding-left: 9px }
-header .note { opacity: 0; animation: fadeUp .9s var(--flow) .86s forwards }
+header .note { font-size: 13px; line-height: 1.55; opacity: 0; animation: fadeUp .9s var(--flow) .86s forwards }
 .demo {
   appearance: none; padding: 0; margin-top: 13px; border: 0; background: transparent; color: var(--dim);
-  font: 11px var(--pixel); text-transform: uppercase; letter-spacing: .07em; box-shadow: none;
+  font: 12px var(--pixel); text-transform: uppercase; letter-spacing: .07em; box-shadow: none;
   opacity: 0; animation: fadeUp .9s var(--flow) .96s forwards;
 }
 .demo:hover { color: var(--paper); box-shadow: none }.demo span { display: inline-block; margin-left: 5px; transition: transform .25s var(--flow) }.demo:hover span { transform: translateX(4px) }
