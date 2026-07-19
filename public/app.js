@@ -88,7 +88,7 @@ fetch('/api/sites').then(r => r.json()).then(data => {
     : { total: data.total, automatic: data.automatic, manual: data.manual };
   sourceTotal = sourceStats.total;
   $('#srccount').textContent = sourceStats.total;
-  if (!$('#q').value.trim()) $('#signal-state span').textContent = t('signal.ready', { count: sourceStats.total });
+  if (!$('#q').value.trim()) $('#signal-state span').textContent = t('redaction.ready');
   // Вся база остаётся в каталоге; в декоративной ленте — компактная репрезентативная выборка.
   // Она дублируется дважды: лента едет на -50% и стыкуется сама с собой без шва.
   const featured = ['VK', 'MAX', 'Telegram', 'Odnoklassniki', 'Instagram', 'TikTok', 'YouTube', 'X', 'GitHub', 'GitLab', 'Habr', 'LinkedIn', 'HeadHunter', 'Avito', 'Twitch', 'Behance'];
@@ -254,19 +254,32 @@ $$('.moment-card[data-intent]').forEach(card => card.addEventListener('click', (
 }));
 syncIntentControl();
 
-/* Карта в первом экране реагирует на цель, но не имитирует запущенное сканирование. */
+/* Интерактивное досье в первом экране — образ публичного следа, не результат сканирования. */
 const signalBoard = $('.signal-board'), signalState = $('#signal-state span'), signalQuery = $('#signal-query');
+const redactionCount = $('#redaction-count'), traceFragments = $$('.trace-fragment');
+let redactedFragments = 0;
+const renderRedaction = () => {
+  redactionCount.textContent = t('redaction.count', { count: redactedFragments, total: traceFragments.length });
+  if (redactedFragments === traceFragments.length) signalState.textContent = t('redaction.done');
+  else signalState.textContent = q.value.trim() ? t('redaction.armed') : t('redaction.ready');
+};
+traceFragments.forEach(fragment => fragment.addEventListener('click', () => {
+  if (fragment.classList.contains('is-redacted')) return;
+  fragment.classList.add('is-redacted');
+  redactedFragments++;
+  renderRedaction();
+}));
 const updateSignalBoard = () => {
   const value = q.value.trim();
   signalBoard.classList.toggle('is-armed', Boolean(value));
-  signalState.textContent = value
-    ? t('signal.detected')
-    : t('signal.ready', { count: sourceTotal });
   signalQuery.textContent = value
     ? `${value.slice(0, 24)}${value.length > 24 ? '…' : ''}`
     : t('signal.none');
+  renderRedaction();
 };
 q.addEventListener('input', updateSignalBoard);
+document.addEventListener('traceerase:languagechange', renderRedaction);
+renderRedaction();
 
 // Перезапуск анимации: снять класс, форсировать reflow, вернуть. Иначе второй раз не сыграет.
 const setNum = (el, v) => {

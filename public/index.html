@@ -99,30 +99,17 @@
     <p class="note" id="note" data-i18n="hero.note">Без регистрации. Только публичные ответы — без догадок.</p>
     <button class="demo" id="demo" type="button"><span data-i18n="hero.demo">Посмотреть пример отчёта</span> <span>→</span></button>
 
-    <figure class="signal-board glass" aria-label="Пример карты источников TraceErase" data-i18n-aria-label="hero.mapAria">
-      <div class="signal-head"><span data-i18n="hero.mapLive">public view / live</span><b id="signal-state"><i></i><span data-i18n="signal.initial">готов к проверке</span></b></div>
-      <svg class="signal-map" viewBox="0 0 320 178" aria-hidden="true">
-        <path class="signal-link l1" d="M42 111 112 77 164 111 243 47"/>
-        <path class="signal-link l2" d="M72 40 112 77 188 40 276 100"/>
-        <path class="signal-link l3" d="M42 111 93 142 164 111 225 140"/>
-        <path class="signal-link l4" d="M164 111 188 40"/>
-        <circle class="signal-node n1" cx="42" cy="111" r="4"/>
-        <circle class="signal-node n2" cx="72" cy="40" r="3"/>
-        <circle class="signal-node n3" cx="93" cy="142" r="3"/>
-        <circle class="signal-node n4" cx="112" cy="77" r="5"/>
-        <circle class="signal-node n5" cx="164" cy="111" r="6"/>
-        <circle class="signal-node n6" cx="188" cy="40" r="4"/>
-        <circle class="signal-node n7" cx="225" cy="140" r="3"/>
-        <circle class="signal-node n8" cx="243" cy="47" r="5"/>
-        <circle class="signal-node n9" cx="276" cy="100" r="4"/>
-        <g class="signal-target">
-          <circle cx="164" cy="111" r="22"/>
-          <circle cx="164" cy="111" r="32"/>
-          <path d="M164 70v12M164 140v12M123 111h12M193 111h12"/>
-        </g>
-      </svg>
-      <div class="signal-query"><span data-i18n="hero.target">отправная точка</span><b id="signal-query" data-i18n="signal.none">не задана</b></div>
-      <figcaption><span data-i18n="hero.profiles">профили</span><span data-i18n="hero.media">медиа</span><span data-i18n="hero.work">работа</span><span data-i18n="hero.games">игры</span></figcaption>
+    <figure class="signal-board redaction-board glass" aria-label="Демонстрация публичного следа TraceErase" data-i18n-aria-label="redaction.aria">
+      <div class="signal-head"><span data-i18n="redaction.file">public trace / demo</span><b id="signal-state"><i></i><span data-i18n="redaction.ready">нажми, чтобы скрыть</span></b></div>
+      <div class="redaction-stage" id="redaction-stage">
+        <span class="redaction-cross" aria-hidden="true"></span>
+        <button class="trace-fragment f1" type="button" data-fragment="1"><small data-i18n="redaction.f1Type">ПРОФИЛЬ / 2018</small><b data-i18n="redaction.f1Name">@старый_ник</b></button>
+        <button class="trace-fragment f2" type="button" data-fragment="2"><small data-i18n="redaction.f2Type">ПУБЛИЧНЫЙ ПОСТ</small><b data-i18n="redaction.f2Name">старый комментарий</b></button>
+        <button class="trace-fragment f3" type="button" data-fragment="3"><small data-i18n="redaction.f3Type">ОТМЕТКА НА ФОТО</small><b data-i18n="redaction.f3Name">видимое имя</b></button>
+        <button class="trace-fragment f4" type="button" data-fragment="4"><small data-i18n="redaction.f4Type">ФОРУМ / 2020</small><b data-i18n="redaction.f4Name">тот же ник</b></button>
+        <div class="redaction-target"><span data-i18n="hero.target">отправная точка</span><b id="signal-query" data-i18n="signal.none">не задана</b></div>
+      </div>
+      <figcaption><span id="redaction-count" data-i18n="redaction.count">0 / 4 скрыто</span><span data-i18n="redaction.hint">это демонстрация, а не результат</span></figcaption>
     </figure>
 
     <div class="hero-outcomes" aria-label="Что даёт TraceErase" data-i18n-aria-label="hero.outcomesAria">

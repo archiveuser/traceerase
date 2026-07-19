@@ -325,7 +325,7 @@ header .note { font-size: 13px; line-height: 1.55; opacity: 0; animation: fadeUp
 
 /* Предметный образ вместо декоративной иллюстрации: источник → связь → след. */
 .signal-board {
-  position: absolute; top: 50%; right: 24px; width: 328px; padding: 14px;
+  position: absolute; top: 50%; right: 24px; width: 348px; padding: 14px;
   transform: translateY(-44%); overflow: hidden; opacity: 0;
   animation: signalIn 1s var(--flow) 1.05s forwards;
 }
@@ -335,33 +335,41 @@ header .note { font-size: 13px; line-height: 1.55; opacity: 0; animation: fadeUp
 .signal-head b { color: var(--paper); font-weight: 400; white-space: nowrap }
 .signal-head i { display: inline-block; width: 5px; height: 5px; margin-right: 6px; background: var(--paper); vertical-align: middle; animation: signalBlink 1.8s var(--step) infinite }
 @keyframes signalBlink { 0%, 58% { opacity: 1 } 59%, 100% { opacity: .22 } }
-.signal-map {
-  display: block; width: 100%; height: auto; padding: 12px 6px;
+.redaction-stage {
+  position: relative; min-height: 210px; overflow: hidden;
   border-top: 1px solid var(--hair-soft); border-bottom: 1px solid var(--hair-soft);
   background-image: linear-gradient(var(--hair-soft) 1px, transparent 1px), linear-gradient(90deg, var(--hair-soft) 1px, transparent 1px);
-  background-size: 24px 24px; background-position: -1px -1px;
+  background-size: 22px 22px; background-position: -1px -1px;
 }
-.signal-link { fill: none; stroke: rgba(255, 255, 255, .31); stroke-width: 1; stroke-dasharray: 4 5; animation: traceFlow 5.4s linear infinite }
-.signal-link.l2 { animation-delay: -1.8s }.signal-link.l3 { animation-delay: -3.1s }.signal-link.l4 { animation-delay: -4.3s }
-@keyframes traceFlow { to { stroke-dashoffset: -54 } }
-.signal-node { fill: var(--ink); stroke: var(--dim); stroke-width: 1.5 }
-.signal-node.n4, .signal-node.n5, .signal-node.n8 { fill: var(--paper); stroke: var(--paper); transform-origin: center; animation: nodePulse 2.6s var(--step) infinite }
-.signal-node.n5 { animation-delay: -.7s }.signal-node.n8 { animation-delay: -1.4s }
-@keyframes nodePulse { 0%, 66% { opacity: 1 } 67%, 72% { opacity: .32 } 73%, 100% { opacity: 1 } }
-.signal-target { fill: none; stroke: var(--paper); stroke-width: .7; opacity: .16; transform-origin: 164px 111px; transition: opacity .4s var(--flow), transform .7s var(--spring) }
-.signal-target circle:last-of-type { stroke-dasharray: 3 6; animation: targetSpin 13s linear infinite }
-@keyframes targetSpin { to { transform: rotate(360deg); transform-origin: 164px 111px } }
-.signal-query { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 2px 0; color: var(--faint); font: 10px var(--pixel); text-transform: uppercase; letter-spacing: .1em }
-.signal-query b { max-width: 205px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dim); font-weight: 400; transition: color .3s var(--flow) }
+.redaction-stage::before { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at 50% 58%, rgba(255,255,255,.09), transparent 38%); pointer-events: none }
+.redaction-cross { position: absolute; left: 50%; top: 52%; width: 64px; height: 64px; border: 1px solid var(--hair); border-radius: 50%; transform: translate(-50%, -50%); opacity: .75; animation: targetSpin 18s linear infinite }
+.redaction-cross::before, .redaction-cross::after { content: ""; position: absolute; background: var(--hair); left: 50%; top: -13px; width: 1px; height: 88px }
+.redaction-cross::after { transform: rotate(90deg) }
+@keyframes targetSpin { to { transform: translate(-50%, -50%) rotate(360deg) } }
+.trace-fragment {
+  position: absolute; z-index: 1; min-width: 108px; padding: 7px 8px 8px; border: 1px solid var(--hair); border-radius: 0;
+  background: var(--g-bg); color: var(--tx); text-align: left; box-shadow: none; cursor: crosshair;
+  font: 400 10px var(--pixel); letter-spacing: .03em; text-transform: none; transition: border-color .25s var(--flow), transform .28s var(--flow), opacity .3s var(--flow); will-change: transform;
+}
+.trace-fragment small, .trace-fragment b { position: relative; z-index: 1; display: block; transition: opacity .18s var(--flow) }
+.trace-fragment small { color: var(--faint); font: 8px var(--pixel); letter-spacing: .08em }
+.trace-fragment b { margin-top: 3px; color: var(--tx); font: 10px var(--pixel); font-weight: 400; white-space: nowrap }
+.trace-fragment::after { content: ""; position: absolute; z-index: 2; inset: 7px 6px; background: var(--paper); transform: scaleX(0); transform-origin: left; transition: transform .34s var(--step); pointer-events: none }
+.trace-fragment:hover { border-color: var(--paper); box-shadow: 0 0 0 2px rgba(255,255,255,.1); transform: translateY(-2px) }
+.trace-fragment.is-redacted { cursor: default; pointer-events: none; border-color: var(--paper) }
+.trace-fragment.is-redacted small, .trace-fragment.is-redacted b { opacity: 0 }
+.trace-fragment.is-redacted::after { transform: scaleX(1) }
+.trace-fragment.f1 { left: 13px; top: 20px }.trace-fragment.f2 { right: 13px; top: 46px }
+.trace-fragment.f3 { left: 30px; bottom: 28px }.trace-fragment.f4 { right: 30px; bottom: 14px }
+.redaction-target { position: absolute; z-index: 1; top: 50%; left: 50%; width: 104px; transform: translate(-50%, -50%); text-align: center; pointer-events: none }
+.redaction-target span { display: block; color: var(--faint); font: 8px var(--pixel); letter-spacing: .09em; text-transform: uppercase }
+.redaction-target b { display: block; max-width: 104px; margin-top: 5px; overflow: hidden; color: var(--paper); font: 10px var(--pixel); font-weight: 400; text-overflow: ellipsis; white-space: nowrap; transition: color .3s var(--flow) }
 .signal-board figcaption { justify-content: flex-start; color: var(--faint); padding: 12px 2px 1px; font-size: 10px }
 .signal-board figcaption span + span::before { content: "·"; color: var(--dim); margin: 0 9px }
 .signal-board.is-armed { border-color: rgba(255, 255, 255, .42) }
-.signal-board.is-armed .signal-map { border-color: rgba(255, 255, 255, .35) }
-.signal-board.is-armed .signal-link { stroke: var(--paper); stroke-width: 1.4; animation-duration: 1.8s }
-.signal-board.is-armed .signal-node { stroke: var(--paper); opacity: 1 }
-.signal-board.is-armed .signal-node.n5 { filter: drop-shadow(0 0 6px rgba(255, 255, 255, .85)); animation-duration: .7s }
-.signal-board.is-armed .signal-target { opacity: .72; transform: scale(1.08) }
-.signal-board.is-armed .signal-query b { color: var(--paper) }
+.signal-board.is-armed .redaction-stage { border-color: rgba(255, 255, 255, .35) }
+.signal-board.is-armed .redaction-cross { border-color: var(--paper); opacity: 1 }
+.signal-board.is-armed .redaction-target b { color: var(--paper) }
 .signal-board.is-armed #signal-state { overflow: hidden; max-width: 156px; text-overflow: ellipsis }
 
 /* ---------- источники ---------- */
@@ -695,10 +703,9 @@ html[data-theme="light"] input, html[data-theme="light"] textarea { background: 
 html[data-theme="light"] input:focus, html[data-theme="light"] textarea:focus { background: rgba(255, 255, 255, .9) }
 html[data-theme="light"] button:hover, html[data-theme="light"] .btn:hover { box-shadow: 0 0 0 3px rgba(10, 10, 11, .11) }
 html[data-theme="light"] .ui-control:hover, html[data-theme="light"] .demo:hover, html[data-theme="light"] .ghostbtn:hover { box-shadow: none }
-html[data-theme="light"] .signal-link { stroke: rgba(10, 10, 11, .33) }
 html[data-theme="light"] .signal-board.is-armed { border-color: rgba(10, 10, 11, .42) }
-html[data-theme="light"] .signal-board.is-armed .signal-map { border-color: rgba(10, 10, 11, .35) }
-html[data-theme="light"] .signal-board.is-armed .signal-node.n5 { filter: drop-shadow(0 0 5px rgba(10, 10, 11, .4)) }
+html[data-theme="light"] .signal-board.is-armed .redaction-stage { border-color: rgba(10, 10, 11, .35) }
+html[data-theme="light"] .signal-board.is-armed .redaction-cross { border-color: var(--paper) }
 html[data-theme="light"] .source-item { background: rgba(10, 10, 11, .018) }
 html[data-theme="light"] .source-item:hover, html[data-theme="light"] .row:hover { background: rgba(10, 10, 11, .055) }
 html[data-theme="light"] .st.unknown { background: repeating-linear-gradient(45deg, transparent 0 3px, rgba(10, 10, 11, .055) 3px 6px) }
