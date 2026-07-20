@@ -430,8 +430,9 @@ header .note { font-size: 13px; line-height: 1.55; opacity: 0; animation: fadeUp
 #graph-note { min-height: 1.7em; margin: 8px 0 15px; color: var(--dim); font-size: 12px }
 .trace-graph-viewport { overflow-x: auto; border: 1px solid var(--hair-soft); background-image: linear-gradient(var(--hair-soft) 1px, transparent 1px), linear-gradient(90deg, var(--hair-soft) 1px, transparent 1px); background-size: 20px 20px }
 .trace-graph-svg { display: block; width: 100%; min-width: 760px; height: auto; min-height: 330px }
-.trace-edge { stroke: var(--hair); stroke-width: 1.4; stroke-dasharray: 4 7; animation: graphEdgeIn .52s var(--flow) both }
-.trace-edge.is-account { stroke: var(--dim) }
+.trace-edge { stroke: var(--hair); stroke-width: 1.2; stroke-dasharray: 4 7; animation: graphEdgeIn .52s var(--flow) both }
+.trace-edge.is-zone { stroke: var(--faint); stroke-dasharray: 2 8 }
+.trace-edge.is-account { stroke: var(--dim); stroke-dasharray: 1 0; stroke-width: 1.35 }
 .trace-node { cursor: default; transform-box: fill-box; transform-origin: center; animation: graphNodeIn .48s var(--spring) both }
 .trace-node.is-link { cursor: pointer }.trace-node.is-link:hover .trace-node-dot { fill: var(--paper) }.trace-node.is-link:hover .trace-node-label { fill: var(--paper) }
 .trace-node-dot { fill: var(--ink); stroke: var(--paper); stroke-width: 1.5; transition: fill .25s var(--flow), stroke .25s var(--flow) }
@@ -439,9 +440,13 @@ header .note { font-size: 13px; line-height: 1.55; opacity: 0; animation: fadeUp
 .trace-node-label { fill: var(--tx); font: 12px var(--pixel); letter-spacing: .02em; transition: fill .25s var(--flow) }
 .trace-node-sub { fill: var(--faint); font: 10px var(--mono); letter-spacing: .05em; text-transform: uppercase }
 .trace-node-root .trace-node-label { fill: var(--paper); font-weight: 700 }
+.trace-group { transform-box: fill-box; transform-origin: center; animation: graphGroupIn .45s var(--spring) both }
+.trace-group-dot { fill: var(--paper); stroke: var(--paper); stroke-width: 1 }
+.trace-group-label { fill: var(--dim); font: 10px var(--pixel); letter-spacing: .08em; text-transform: uppercase }
 .trace-graph-legend { margin-top: 12px; color: var(--faint); font-size: 10px; line-height: 1.55 }
 @keyframes graphEdgeIn { from { stroke-dashoffset: 68; opacity: 0 } to { stroke-dashoffset: 0; opacity: 1 } }
 @keyframes graphNodeIn { from { opacity: 0; transform: scale(.35) } to { opacity: 1; transform: scale(1) } }
+@keyframes graphGroupIn { from { opacity: 0; transform: scale(.4) rotate(18deg) } to { opacity: 1; transform: scale(1) rotate(0) } }
 
 .filters { display: flex; gap: 6px; margin-bottom: 12px }
 .chip {

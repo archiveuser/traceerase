@@ -303,16 +303,17 @@ const setCounts = () => {
   renderCtaTail();
 };
 
-/* ---------- карта следа: не «связи всего со всем», а только подтверждённые профили ---------- */
+/* ---------- карта следа: центр → тематическая зона → подтверждённый профиль ---------- */
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const graphBox = $('#trace-graph'), graphLinks = $('#graph-links'), graphNodes = $('#graph-nodes');
 const GRAPH_ROOT = { x: 480, y: 210 };
-const GRAPH_SLOTS = [
-  { x: 184, y: 92 }, { x: 748, y: 92 }, { x: 844, y: 236 },
-  { x: 690, y: 344 }, { x: 274, y: 338 }, { x: 112, y: 236 },
-  { x: 480, y: 54 }, { x: 480, y: 372 }, { x: 850, y: 370 }
-];
-let graphState = { target: '', nodes: [], finished: false };
+const GRAPH_ZONES = {
+  soc: { x: 250, y: 104 }, dev: { x: 696, y: 96 }, game: { x: 716, y: 314 },
+  blog: { x: 262, y: 326 }, media: { x: 820, y: 206 }, work: { x: 480, y: 360 },
+  link: { x: 480, y: 58 }, message: { x: 128, y: 210 }, creator: { x: 126, y: 330 },
+  market: { x: 810, y: 82 }, learn: { x: 604, y: 370 }
+};
+let graphState = { target: '', nodes: [], groups: new Map(), finished: false };
 const svgNode = name => document.createElementNS(SVG_NS, name);
 const graphLabel = value => {
   const text = String(value || '—');
@@ -323,23 +324,29 @@ const graphLabelPosition = point => {
   if (point.x > 690) return { x: point.x - 15, anchor: 'end' };
   return { x: point.x, anchor: 'middle' };
 };
-const graphSlot = index => {
-  if (GRAPH_SLOTS[index]) return GRAPH_SLOTS[index];
-  // После базовых позиций раскладываем оставшиеся узлы по золотому углу,
-  // чтобы длинная выдача не накладывала один профиль на другой.
-  const angle = index * 2.399963229728653;
-  const radius = 148 + (index % 3) * 30;
-  return { x: 480 + Math.cos(angle) * radius, y: 210 + Math.sin(angle) * radius * .7 };
+const graphZonePoint = key => GRAPH_ZONES[key] || {
+  x: 480 + Math.cos(graphState.groups.size * 2.4) * 292,
+  y: 210 + Math.sin(graphState.groups.size * 2.4) * 142
+};
+const graphMemberPoint = (zone, index) => {
+  const angle = -1.68 + index * 1.91;
+  const radius = 54 + Math.floor(index / 4) * 18;
+  return { x: zone.x + Math.cos(angle) * radius, y: zone.y + Math.sin(angle) * radius * .72 };
 };
 const graphText = (group, text, x, y, className, anchor = 'middle') => {
   const el = svgNode('text');
   el.classList.add(className); el.setAttribute('x', x); el.setAttribute('y', y); el.setAttribute('text-anchor', anchor);
   el.textContent = text; group.append(el); return el;
 };
+const graphLine = (from, to, type, delay = 0) => {
+  const edge = svgNode('line'); edge.classList.add('trace-edge', type);
+  edge.setAttribute('x1', from.x); edge.setAttribute('y1', from.y); edge.setAttribute('x2', to.x); edge.setAttribute('y2', to.y);
+  edge.style.animationDelay = `${delay}ms`; graphLinks.append(edge); return edge;
+};
 const graphCount = () => { $('#graph-count').textContent = `${graphState.nodes.length} · ${t('graph.count')}`; };
 const graphRoot = target => {
   graphBox.hidden = false; graphLinks.replaceChildren(); graphNodes.replaceChildren();
-  graphState = { target, nodes: [], finished: false };
+  graphState = { target, nodes: [], groups: new Map(), finished: false };
   const node = svgNode('g'); node.classList.add('trace-node', 'trace-node-root');
   const square = svgNode('rect'); square.classList.add('trace-node-dot'); square.setAttribute('x', GRAPH_ROOT.x - 8); square.setAttribute('y', GRAPH_ROOT.y - 8); square.setAttribute('width', 16); square.setAttribute('height', 16);
   const title = svgNode('title'); title.textContent = t('graph.rootTitle', { target });
@@ -349,29 +356,44 @@ const graphRoot = target => {
   graphNodes.append(node); graphCount();
   $('#graph-note').textContent = t('graph.waiting');
 };
+const graphGroup = key => {
+  const existing = graphState.groups.get(key);
+  if (existing) return existing;
+  const point = graphZonePoint(key);
+  graphLine(GRAPH_ROOT, point, 'is-zone');
+  const node = svgNode('g'); node.classList.add('trace-group');
+  const diamond = svgNode('rect'); diamond.classList.add('trace-group-dot'); diamond.setAttribute('x', point.x - 6); diamond.setAttribute('y', point.y - 6); diamond.setAttribute('width', 12); diamond.setAttribute('height', 12); diamond.setAttribute('transform', `rotate(45 ${point.x} ${point.y})`);
+  const title = svgNode('title'); title.textContent = CAT[key] || t('graph.profile');
+  const label = graphLabelPosition(point);
+  node.append(title, diamond);
+  graphText(node, CAT[key] || t('graph.profile'), label.x, point.y - 16, 'trace-group-label', label.anchor);
+  const count = graphText(node, t('graph.zoneCount', { count: 0 }), label.x, point.y + 24, 'trace-node-sub', label.anchor);
+  graphNodes.append(node);
+  const group = { key, point, hits: [], count };
+  graphState.groups.set(key, group); return group;
+};
 const graphAdd = hit => {
   if (hit.state !== 'found' || hit.type !== 'account' || !graphState.target) return;
   const url = safeHttpUrl(hit.url);
   const key = `${sourceText(hit)}|${url}`;
   if (graphState.nodes.some(node => node.key === key)) return;
-  const point = graphSlot(graphState.nodes.length);
-  const edge = svgNode('line');
-  edge.classList.add('trace-edge', 'is-account');
-  edge.setAttribute('x1', GRAPH_ROOT.x); edge.setAttribute('y1', GRAPH_ROOT.y); edge.setAttribute('x2', point.x); edge.setAttribute('y2', point.y);
-  graphLinks.append(edge);
+  const group = graphGroup(hit.cat || 'link');
+  const point = graphMemberPoint(group.point, group.hits.length);
+  graphLine(group.point, point, 'is-account', 130);
 
-  const node = svgNode('g'); node.classList.add('trace-node'); if (url) node.classList.add('is-link');
+  const node = svgNode('g'); node.classList.add('trace-node'); node.style.animationDelay = '130ms'; if (url) node.classList.add('is-link');
   const title = svgNode('title'); title.textContent = `${sourceText(hit)} — ${t('graph.profile')}`;
-  const dot = svgNode('circle'); dot.classList.add('trace-node-dot'); dot.setAttribute('cx', point.x); dot.setAttribute('cy', point.y); dot.setAttribute('r', 7);
+  const dot = svgNode('circle'); dot.classList.add('trace-node-dot'); dot.setAttribute('cx', point.x); dot.setAttribute('cy', point.y); dot.setAttribute('r', 6.5);
   const label = graphLabelPosition(point);
   node.append(title, dot);
-  graphText(node, graphLabel(sourceText(hit)), label.x, point.y - 14, 'trace-node-label', label.anchor);
-  graphText(node, CAT[hit.cat] || t('graph.profile'), label.x, point.y + 23, 'trace-node-sub', label.anchor);
+  graphText(node, graphLabel(sourceText(hit)), label.x, point.y - 13, 'trace-node-label', label.anchor);
+  graphText(node, t('graph.profile'), label.x, point.y + 22, 'trace-node-sub', label.anchor);
   if (url) {
     const wrapper = svgNode('a');
     wrapper.setAttribute('href', url); wrapper.setAttribute('target', '_blank'); wrapper.setAttribute('rel', 'noopener noreferrer');
     wrapper.append(node); graphNodes.append(wrapper);
   } else graphNodes.append(node);
+  group.hits.push(hit); group.count.textContent = t('graph.zoneCount', { count: group.hits.length });
   graphState.nodes.push({ key, hit }); graphCount();
   $('#graph-note').textContent = t('graph.found', { count: graphState.nodes.length });
 };
@@ -381,7 +403,7 @@ const graphFinish = () => {
   if (!graphState.nodes.length) $('#graph-note').textContent = t('graph.empty');
 };
 const resetGraph = () => {
-  graphState = { target: '', nodes: [], finished: false };
+  graphState = { target: '', nodes: [], groups: new Map(), finished: false };
   graphLinks.replaceChildren(); graphNodes.replaceChildren(); graphBox.hidden = true;
 };
 const refreshGraph = () => {

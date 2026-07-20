@@ -9,11 +9,15 @@ const catalogGroups = JSON.parse(await readFile(new URL('./catalog.json', import
 // сервисов мы даём официальный/прямой маршрут, но никогда не выдумываем found/free.
 const AUTO_SOURCES = new Set([
   'GitHub', 'GitLab', 'Gitea.com', 'Telegram', 'Bluesky',
-  'Minecraft', 'Codeforces', 'Chess.com', 'Lichess'
+  'Minecraft', 'Codeforces', 'Chess.com', 'Lichess', 'Steam',
+  'Docker Hub', 'crates.io', 'RubyGems', 'Scratch', 'Codeberg', 'Codewars',
+  'Mastodon', 'Keybase', 'Hacker News', 'Roblox'
 ]);
 const AUTO_METHODS = {
   GitHub: 'status', GitLab: 'json-array', 'Gitea.com': 'status', Telegram: 'marker',
-  Bluesky: 'marker', Minecraft: 'status', Codeforces: 'marker', 'Chess.com': 'status', Lichess: 'status'
+  Bluesky: 'marker', Minecraft: 'status', Codeforces: 'marker', 'Chess.com': 'status', Lichess: 'status', Steam: 'marker',
+  'Docker Hub': 'status', 'crates.io': 'status', RubyGems: 'status', Scratch: 'status', Codeberg: 'status', Codewars: 'status',
+  Mastodon: 'marker', Keybase: 'keybase-user', 'Hacker News': 'json-user', Roblox: 'roblox-user'
 };
 const ALLOWED_CATEGORIES = new Set(['dev', 'soc', 'message', 'blog', 'media', 'work', 'creator', 'market', 'game', 'link', 'learn']);
 const slug = value => String(value).toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -28,7 +32,7 @@ const homeFrom = site => {
 const merged = new Map(baseSites.map(site => [site.n.toLowerCase(), {
   ...site,
   mode: AUTO_SOURCES.has(site.n) ? 'auto' : 'manual',
-  method: AUTO_METHODS[site.n] || 'manual'
+  method: AUTO_METHODS[site.n] || site.method || 'manual'
 }]));
 for (const [cat, entries] of Object.entries(catalogGroups)) {
   for (const [n, home, profile = null] of entries) {
@@ -76,6 +80,11 @@ const COMMON_TLDS = new Set([
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
 const get = (url, headers = {}, ms = 9000) =>
   fetch(url, { headers: { 'user-agent': UA, 'accept-language': 'ru,en;q=0.9', ...headers }, redirect: 'follow', signal: AbortSignal.timeout(ms) });
+const postJson = (url, payload, ms = 9000) => fetch(url, {
+  method: 'POST', redirect: 'follow', signal: AbortSignal.timeout(ms),
+  headers: { 'user-agent': UA, 'content-type': 'application/json', accept: 'application/json' },
+  body: JSON.stringify(payload)
+});
 
 /**
  * email → domain → username. Порядок важен: "a@b.com" содержит точку, но это email,
@@ -104,7 +113,18 @@ export const checkSite = async (site, user) => {
   const method = site.method || (site.has ? 'marker' : 'redirect');
   const answer = (state, reason) => ({ state, url: profileUrl, method, reason, checkedAt });
   try {
-    const r = await get(url);
+    // Roblox принимает имя только через официальный POST-lookup. Сверяем именно
+    // requestedUsername, а не display name, чтобы не спутать разные аккаунты.
+    if (method === 'roblox-user') {
+      const r = await postJson('https://users.roblox.com/v1/usernames/users', { usernames: [lookupUser], excludeBannedUsers: false });
+      if (!r.ok) return answer('unknown', r.status === 429 ? 'rate-limited' : 'unexpected-status');
+      const data = await r.json().catch(() => null);
+      if (!Array.isArray(data?.data)) return answer('unknown', 'invalid-response');
+      const match = data.data.some(item => String(item?.requestedUsername || item?.name || '').toLowerCase() === lookupUser.toLowerCase());
+      return answer(match ? 'found' : 'free', match ? 'exact-api-match' : 'no-exact-api-match');
+    }
+
+    const r = await get(url, site.headers || {});
 
     if (r.status === 404 || r.status === 410) return answer('free', 'not-found-status');
     if (r.status === 401 || r.status === 403 || r.status === 429 || r.status >= 500) {
@@ -117,6 +137,31 @@ export const checkSite = async (site, user) => {
       if (!Array.isArray(data)) return answer('unknown', 'invalid-response');
       const match = data.some(item => String(item?.username || '').toLowerCase() === lookupUser.toLowerCase());
       return answer(match ? 'found' : 'free', match ? 'exact-json-match' : 'no-exact-json-match');
+    }
+
+    // Для перечисленных API 2xx означает именно существующий публичный профиль;
+    // soft-404 сюда не попадают — их мы оставляем ручными или проверяем маркером.
+    if (method === 'status') {
+      if (!r.ok) return answer('unknown', 'unexpected-status');
+      return answer('found', 'profile-response');
+    }
+
+    if (method === 'keybase-user') {
+      if (!r.ok) return answer('unknown', 'unexpected-status');
+      const data = await r.json().catch(() => null);
+      if (!data) return answer('unknown', 'invalid-response');
+      if (!Array.isArray(data.them)) return answer(data?.status?.code === 100 ? 'free' : 'unknown', data?.status?.code === 100 ? 'no-exact-api-match' : 'invalid-response');
+      const match = data.them.some(item => String(item?.basics?.username || '').toLowerCase() === lookupUser.toLowerCase());
+      return answer(match ? 'found' : 'free', match ? 'exact-api-match' : 'no-exact-api-match');
+    }
+
+    if (method === 'json-user') {
+      if (!r.ok) return answer('unknown', 'unexpected-status');
+      const data = await r.json().catch(() => undefined);
+      if (data === null) return answer('free', 'no-user-record');
+      if (!data || typeof data !== 'object') return answer('unknown', 'invalid-response');
+      const match = String(data.id || '').toLowerCase() === lookupUser.toLowerCase();
+      return answer(match ? 'found' : 'unknown', match ? 'exact-api-match' : 'invalid-response');
     }
 
     // soft-404: страница отдаётся всегда, профиль отличает только маркер в теле.

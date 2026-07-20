@@ -1,11 +1,13 @@
 # TraceErase
 
 Собирает карту публичного цифрового следа и превращает её в маршрут действий.
-Каталог содержит **246 сервисов**: 9 источников с доказуемым автоматическим ответом
-и 237 официальных маршрутов для ручной проверки. Результаты стримятся в браузер по SSE.
+Каталог содержит **246 сервисов**: 20 источников с доказуемым автоматическим ответом
+и 226 официальных маршрутов для ручной проверки. Результаты стримятся в браузер по SSE.
 
 **Автоматическое сканирование настоящее.** Никаких моков: используются публичные ответы
-GitHub, GitLab, Gitea, Telegram, Bluesky, Mojang, Codeforces, Chess.com и Lichess,
+GitHub, GitLab, Gitea, Codeberg, Telegram, Bluesky, Mastodon, Hacker News, Steam,
+Mojang, Roblox, Codeforces, Chess.com, Lichess, Docker Hub, crates.io, RubyGems,
+Scratch, Codewars и Keybase,
 а для email/домена — DNS-over-HTTPS, RDAP, Certificate Transparency и Gravatar.
 Сервисы с авторизацией, бот-стеной или нестабильным URL не имитируются: TraceErase
 открывает их как ручной маршрут и не присваивает им `found/free`.
@@ -26,7 +28,7 @@ npm test           # проверяет логику определения ак
 
 | Ввод | Источники |
 |------|-----------|
-| никнейм | 9 автоматических проверок + 237 ручных маршрутов: VK, MAX, OK, Instagram, TikTok, YouTube, LinkedIn, Habr, карьерные, creator-, dev- и медиасервисы |
+| никнейм | 20 автоматических проверок + 226 ручных маршрутов: VK, MAX, OK, Instagram, TikTok, YouTube, LinkedIn, Habr, карьерные, creator-, dev- и медиасервисы |
 | email | Gravatar (аватар + публичный профиль), MD5-хеш, MX-записи домена, утечки (с ключом HIBP) |
 | домен | Bluesky custom-handle, A/TXT-записи, RDAP-регистрация, поддомены из CT-логов |
 
@@ -37,7 +39,7 @@ server.js    HTTP + SSE, статика, rate limit
 scan.js      все проверки
 sites.json   активные endpoint-шаблоны и прежний каталог
 catalog.json 229 популярных официальных сервисов и ручных маршрутов
-test.js      схема каталога, unit-контракты и независимая live-проверка всех 9 автоматических источников
+test.js      схема каталога, unit-контракты и независимая live-проверка всех 20 автоматических источников
 public/      лендинг (index.html, style.css, app.js)
 public/font/ Monocraft — шрифт Minecraft, self-hosted, 27 КБ на два начертания
 ```

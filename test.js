@@ -16,14 +16,15 @@ assert.equal(kindOf('x'.repeat(50)), null);
 assert.equal(md5('Me@Example.COM '), md5('me@example.com'));
 
 assert.ok(sites.length > 200, `ожидалось >200 источников, получено ${sites.length}`);
-assert.equal(scanSites.length, 9);
+assert.equal(scanSites.length, 20);
 assert.equal(manualSites.length, sites.length - scanSites.length);
 assert.equal(new Set(sites.map(site => site.id)).size, sites.length);
 assert.ok(sites.every(site => site.home.startsWith('https://')));
 assert.equal(sites.find(site => site.n === 'MAX')?.mode, 'manual');
 assert.equal(sites.find(site => site.n === 'VK')?.mode, 'manual');
 assert.deepEqual(new Set(scanSites.map(site => site.n)), new Set([
-  'GitHub', 'GitLab', 'Gitea.com', 'Telegram', 'Bluesky', 'Minecraft', 'Codeforces', 'Chess.com', 'Lichess'
+  'GitHub', 'GitLab', 'Gitea.com', 'Telegram', 'Bluesky', 'Minecraft', 'Codeforces', 'Chess.com', 'Lichess', 'Steam',
+  'Docker Hub', 'crates.io', 'RubyGems', 'Scratch', 'Codeberg', 'Codewars', 'Mastodon', 'Keybase', 'Hacker News', 'Roblox'
 ]));
 
 // Контракт классификатора проверяется без сети: любые бот-стены/5xx обязаны быть unknown.
@@ -45,6 +46,21 @@ try {
   assert.equal((await checkSite({ n: 'Mock', u: 'https://example.com/users?q={}', method: 'json-array' }, 'demo')).state, 'found');
   globalThis.fetch = async () => response({ body: '[]' });
   assert.equal((await checkSite({ n: 'Mock', u: 'https://example.com/users?q={}', method: 'json-array' }, 'demo')).state, 'free');
+
+  globalThis.fetch = async () => response({ body: '{"them":[{"basics":{"username":"Demo"}}]}' });
+  assert.equal((await checkSite({ n: 'Mock', u: 'https://example.com/users?q={}', method: 'keybase-user' }, 'demo')).state, 'found');
+  globalThis.fetch = async () => response({ body: '{"them":[]}' });
+  assert.equal((await checkSite({ n: 'Mock', u: 'https://example.com/users?q={}', method: 'keybase-user' }, 'demo')).state, 'free');
+
+  globalThis.fetch = async () => response({ body: '{"id":"Demo"}' });
+  assert.equal((await checkSite({ n: 'Mock', u: 'https://example.com/users/{}.json', method: 'json-user' }, 'demo')).state, 'found');
+  globalThis.fetch = async () => response({ body: 'null' });
+  assert.equal((await checkSite({ n: 'Mock', u: 'https://example.com/users/{}.json', method: 'json-user' }, 'demo')).state, 'free');
+
+  globalThis.fetch = async () => response({ body: '{"data":[{"requestedUsername":"Demo"}]}' });
+  assert.equal((await checkSite({ n: 'Mock', u: 'https://example.com/users/{}', method: 'roblox-user' }, 'demo')).state, 'found');
+  globalThis.fetch = async () => response({ body: '{"data":[]}' });
+  assert.equal((await checkSite({ n: 'Mock', u: 'https://example.com/users/{}', method: 'roblox-user' }, 'demo')).state, 'free');
 
   globalThis.fetch = async () => response({ url: 'https://example.com/something' });
   assert.equal((await checkSite({ n: 'Mock', u: 'https://example.com/{}' }, 'me')).state, 'free');
@@ -176,13 +192,93 @@ const liveContracts = [
       assert.equal((await checkSite(byName('Lichess'), 'DrNykterstein')).state, 'found');
       assert.equal((await checkSite(byName('Lichess'), uniqueMissing())).state, 'free');
     }
+  },
+  {
+    name: 'Steam', health: 'https://steamcommunity.com/id/gaben',
+    verify: async () => {
+      assert.equal((await checkSite(byName('Steam'), 'gaben')).state, 'found');
+      assert.equal((await checkSite(byName('Steam'), uniqueMissing())).state, 'free');
+    }
+  },
+  {
+    name: 'Docker Hub', health: 'https://hub.docker.com/v2/users/docker',
+    verify: async () => {
+      assert.equal((await checkSite(byName('Docker Hub'), 'docker')).state, 'found');
+      assert.equal((await checkSite(byName('Docker Hub'), uniqueMissing())).state, 'free');
+    }
+  },
+  {
+    name: 'crates.io', health: 'https://crates.io/api/v1/users/dtolnay',
+    verify: async () => {
+      assert.equal((await checkSite(byName('crates.io'), 'dtolnay')).state, 'found');
+      assert.equal((await checkSite(byName('crates.io'), uniqueMissing())).state, 'free');
+    }
+  },
+  {
+    name: 'RubyGems', health: 'https://rubygems.org/api/v1/profiles/ryanb.json',
+    verify: async () => {
+      assert.equal((await checkSite(byName('RubyGems'), 'ryanb')).state, 'found');
+      assert.equal((await checkSite(byName('RubyGems'), uniqueMissing())).state, 'free');
+    }
+  },
+  {
+    name: 'Scratch', health: 'https://api.scratch.mit.edu/users/griffpatch',
+    verify: async () => {
+      assert.equal((await checkSite(byName('Scratch'), 'griffpatch')).state, 'found');
+      assert.equal((await checkSite(byName('Scratch'), uniqueMissing())).state, 'free');
+    }
+  },
+  {
+    name: 'Codeberg',
+    health: () => fetch('https://codeberg.org/api/v1/users/forgejo', { headers: { accept: 'application/json', 'user-agent': 'TraceErase public profile checker' }, signal: AbortSignal.timeout(2500) }),
+    verify: async () => {
+      assert.equal((await checkSite(byName('Codeberg'), 'forgejo')).state, 'found');
+      assert.equal((await checkSite(byName('Codeberg'), uniqueMissing())).state, 'free');
+    }
+  },
+  {
+    name: 'Codewars', health: 'https://www.codewars.com/users/jhoffner',
+    verify: async () => {
+      assert.equal((await checkSite(byName('Codewars'), 'jhoffner')).state, 'found');
+      assert.equal((await checkSite(byName('Codewars'), uniqueMissing())).state, 'free');
+    }
+  },
+  {
+    name: 'Mastodon', health: 'https://mastodon.social/api/v1/accounts/lookup?acct=Gargron',
+    verify: async () => {
+      assert.equal((await checkSite(byName('Mastodon'), 'Gargron')).state, 'found');
+      assert.equal((await checkSite(byName('Mastodon'), uniqueMissing())).state, 'free');
+    }
+  },
+  {
+    name: 'Keybase', health: 'https://keybase.io/_/api/1.0/user/lookup.json?usernames=max',
+    verify: async () => {
+      assert.equal((await checkSite(byName('Keybase'), 'max')).state, 'found');
+      assert.equal((await checkSite(byName('Keybase'), uniqueMissing())).state, 'free');
+    }
+  },
+  {
+    name: 'Hacker News', health: 'https://hacker-news.firebaseio.com/v0/user/pg.json',
+    verify: async () => {
+      assert.equal((await checkSite(byName('Hacker News'), 'pg')).state, 'found');
+      assert.equal((await checkSite(byName('Hacker News'), uniqueMissing())).state, 'free');
+    }
+  },
+  {
+    name: 'Roblox',
+    health: () => fetch('https://users.roblox.com/v1/usernames/users', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ usernames: ['Roblox'], excludeBannedUsers: false }), signal: AbortSignal.timeout(2500) }),
+    verify: async () => {
+      assert.equal((await checkSite(byName('Roblox'), 'Roblox')).state, 'found');
+      assert.equal((await checkSite(byName('Roblox'), uniqueMissing())).state, 'free');
+    }
   }
 ];
 
 // Доступность проверяется для каждого провайдера отдельно: падение GitHub больше
 // не скрывает регрессии во всех остальных контрактах.
 const availability = await Promise.all(liveContracts.map(contract =>
-  fetch(contract.health, { signal: AbortSignal.timeout(2500) }).then(r => r.ok).catch(() => false)
+  (typeof contract.health === 'function' ? contract.health() : fetch(contract.health, { signal: AbortSignal.timeout(2500) }))
+    .then(r => r.ok).catch(() => false)
 ));
 let liveCount = 0;
 for (let i = 0; i < liveContracts.length; i++) {
