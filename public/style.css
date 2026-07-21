@@ -76,7 +76,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visib
 
 /* Пиксельный шрифт без сглаживания — иначе он мыльный, а не пиксельный */
 .px, h1, h2, h3, .kicker, .logo, nav .links a, button, .btn, .chip, .n, .v,
-.counts b, .ring b, .tag, .step .i, .stats > div, .price h3, .badge, .ribbon, .st, .ui-control {
+.counts b, .ring b, .tag, .step .i, .stats > div, .badge, .ribbon, .st, .ui-control {
   font-family: var(--pixel);
   -webkit-font-smoothing: none;
   font-smooth: never;
@@ -311,6 +311,8 @@ button:disabled { background: transparent; color: var(--faint); border-color: va
 .note { color: var(--dim); font-size: 12px; margin-top: 15px }
 .note.err { color: var(--paper); border-left: 2px solid var(--paper); padding-left: 9px }
 header .note { font-size: 13px; line-height: 1.55; opacity: 0; animation: fadeUp .9s var(--flow) .86s forwards }
+.free-promise { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px 11px; max-width: 640px; margin-top: 12px; color: var(--dim); font-size: 11px; line-height: 1.55; opacity: 0; animation: fadeUp .9s var(--flow) .91s forwards }
+.free-promise b { padding: 2px 5px; background: var(--paper); color: var(--ink); font: 700 9px var(--pixel); letter-spacing: .08em; white-space: nowrap }
 .demo {
   appearance: none; padding: 0; margin-top: 13px; border: 0; background: transparent; color: var(--dim);
   font: 12px var(--pixel); text-transform: uppercase; letter-spacing: .07em; box-shadow: none;
@@ -424,6 +426,7 @@ header .note { font-size: 13px; line-height: 1.55; opacity: 0; animation: fadeUp
 /* Карта строится как инструмент: центральный идентификатор и только подтверждённые связи. */
 .trace-graph { margin: 0 0 18px; padding: clamp(20px, 3vw, 28px); overflow: hidden }
 .trace-graph[hidden] { display: none }
+.report-progress { margin: -4px 0 14px; color: var(--faint); font-size: 11px; letter-spacing: .025em }
 .trace-graph-head { display: flex; align-items: end; justify-content: space-between; gap: 16px }
 .trace-graph-head .kicker { margin-bottom: 8px }.trace-graph-head h3 { font-size: clamp(16px, 2vw, 21px) }
 #graph-count { color: var(--faint); font: 10px var(--pixel); letter-spacing: .1em; text-transform: uppercase; white-space: nowrap }
@@ -667,29 +670,6 @@ header .note { font-size: 13px; line-height: 1.55; opacity: 0; animation: fadeUp
 @keyframes markScan { 0% { top: 8%; opacity: 0 } 8% { opacity: 1 } 76% { top: 92%; opacity: 1 } 77%, 100% { top: 92%; opacity: 0 } }
 @keyframes markPulse { 50% { opacity: .28 } }
 
-/* ---------- цены ---------- */
-.pricing { align-items: start }
-.price { padding: 30px; display: flex; flex-direction: column; transition: transform .6s var(--flow), border-color .4s var(--flow) }
-.price:hover { transform: translateY(-5px) }
-.price.hot { border-color: var(--paper) }
-.ribbon { position: absolute; top: -1px; right: 18px; background: var(--paper); color: var(--ink); font-size: 9px; font-weight: 700; letter-spacing: .06em; padding: 5px 9px; z-index: 2; text-transform: uppercase }
-.price h3 { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); font-weight: 400 }
-.price .v { font-size: 30px; font-weight: 700; margin: 16px 0 4px; color: var(--paper) }
-.price .v small { font-size: 12px; color: var(--dim); font-weight: 400; font-family: var(--mono) }
-.price ul { list-style: none; margin: 22px 0 28px; font-size: 12.5px; color: var(--dim); flex: 1 }
-.price li { padding: 6px 0 }
-.price li::before { content: "+ "; color: var(--paper) }
-.price > a {
-  position: relative; z-index: 2; text-align: center; text-decoration: none;
-  border: 1px solid var(--hair); background: transparent; color: var(--tx);
-  padding: 14px; border-radius: 2px; font: 700 12px var(--pixel); text-transform: uppercase;
-  transition: background .25s, color .25s, border-color .25s;
-}
-.price > a:hover { background: var(--paper); color: var(--ink); border-color: var(--paper) }
-.price.hot > a { background: var(--paper); color: var(--ink); border-color: var(--paper) }
-.price.hot > a:hover { background: var(--tx) }
-.badge { display: inline-block; background: var(--paper); color: var(--ink); font-size: 9px; letter-spacing: .06em; padding: 3px 6px; margin-left: 6px; vertical-align: middle; text-transform: uppercase }
-
 /* ---------- финал ---------- */
 .final { text-align: center; padding-bottom: 140px }
 .final h2 { font-size: clamp(23px, 4.4vw, 44px); line-height: 1.25; margin-bottom: 36px }
@@ -745,7 +725,7 @@ dialog textarea { width: 100%; margin: 16px 0; resize: vertical; font-size: 12px
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition-duration: .01ms !important }
   html { scroll-behavior: auto }
-  .js .rv, .js .stg > *, .lead, .scan-purpose, .scan, header .note, .demo, .hero-outcomes, .signal-board, .scrollhint, .ticker { opacity: 1 !important; transform: none !important }
+  .js .rv, .js .stg > *, .lead, .scan-purpose, .scan, header .note, .free-promise, .demo, .hero-outcomes, .signal-board, .scrollhint, .ticker { opacity: 1 !important; transform: none !important }
   .hw i { transform: none !important }
   h1 .go { color: var(--faint) }
   h1 .go::after { display: none }

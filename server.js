@@ -8,14 +8,15 @@ const PORT = process.env.PORT || 3000;
 const PUB = resolve(fileURLToPath(new URL('./public/', import.meta.url)));
 const MIME = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.json': 'application/json', '.svg': 'image/svg+xml', '.woff2': 'font/woff2' };
 
-// ponytail: счётчик в памяти процесса. Redis — если нод станет больше одной.
-// 10/мин: защищает внешние сайты от нашего трафика, но не режет живую демонстрацию.
+// Счётчик в памяти процесса. Redis понадобится только при нескольких инстансах.
+// Это не тарифный лимит: защита не даёт одному адресу перегрузить внешние публичные API.
 const hits = new Map();
 const overLimit = ip => {
   const now = Date.now();
   const a = (hits.get(ip) || []).filter(t => now - t < 60_000);
   a.push(now); hits.set(ip, a);
-  return a.length > 10;
+  if (hits.size > 5_000) for (const [key, values] of hits) if (!values.some(t => now - t < 60_000)) hits.delete(key);
+  return a.length > 25;
 };
 
 const sse = res => {
@@ -149,7 +150,8 @@ async function scanStream(q, send, lang = 'ru') {
 
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
-  const ip = req.socket.remoteAddress;
+  const forwarded = req.headers['x-forwarded-for'];
+  const ip = (Array.isArray(forwarded) ? forwarded[0] : forwarded || req.socket.remoteAddress || '').split(',')[0].trim();
 
   // Список источников отдаёт сервер, а не разметка: иначе число на лендинге
   // разъезжается с реальностью при первом же изменении sites.json.
@@ -184,7 +186,11 @@ const server = createServer(async (req, res) => {
     const q = (url.searchParams.get('q') || '').trim().slice(0, 64);
     const lang = url.searchParams.get('lang') === 'en' ? 'en' : 'ru';
     if (!q) { res.writeHead(400).end('no query'); return; }
-    if (overLimit(ip)) { res.writeHead(429, { 'content-type': 'text/plain; charset=utf-8' }).end(scanText(lang, 'rate')); return; }
+    if (overLimit(ip)) {
+      const send = sse(res);
+      send('error', { msg: scanText(lang, 'rate') });
+      return res.end();
+    }
     const send = sse(res);
     req.on('close', () => res.end());
     try { await scanStream(q, send, lang); } catch (e) { send('error', { msg: String(e.message || e) }); }

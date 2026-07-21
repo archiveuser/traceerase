@@ -91,12 +91,13 @@
       </div>
     </fieldset>
 
-    <form class="scan glass" id="scan" autocomplete="off">
+    <form class="scan glass" id="scan" autocomplete="off" aria-busy="false">
       <label class="sr-only" for="q" data-i18n="hero.inputLabel">Никнейм, email или домен</label>
-      <input id="q" name="q" placeholder="введи никнейм, email или домен" aria-label="Никнейм, email или домен" data-i18n-placeholder="hero.inputPlaceholder" data-i18n-aria-label="hero.inputLabel" spellcheck="false" required>
+      <input id="q" name="q" placeholder="введи никнейм, email или домен" aria-label="Никнейм, email или домен" data-i18n-placeholder="hero.inputPlaceholder" data-i18n-aria-label="hero.inputLabel" spellcheck="false" autocapitalize="none" autocorrect="off" inputmode="text" maxlength="64" required>
       <button id="go" class="mag" data-i18n="hero.cta">Увидеть свой след</button>
     </form>
     <p class="note" id="note" data-i18n="hero.note">Без регистрации. Только публичные ответы — без догадок.</p>
+    <p class="free-promise"><b data-i18n="hero.freeKicker">ВСЕГДА БЕСПЛАТНО</b><span data-i18n="hero.freeText">Полный отчёт, карта и экспорт — без подписки.</span></p>
     <button class="demo" id="demo" type="button"><span data-i18n="hero.demo">Посмотреть пример отчёта</span> <span>→</span></button>
 
     <figure class="signal-board redaction-board glass" aria-label="Демонстрация публичного следа TraceErase" data-i18n-aria-label="redaction.aria">
@@ -140,7 +141,7 @@
   </div>
 </section>
 
-<section id="report" hidden>
+<section id="report" hidden tabindex="-1">
   <div class="wrap">
     <div class="rhead">
       <div>
@@ -152,6 +153,7 @@
         <b id="pct">0%</b>
       </div>
     </div>
+    <p class="report-progress" id="scan-progress" aria-live="polite">Проверено: 0 из 0 источников</p>
     <div class="print-meta" id="print-meta" aria-hidden="true"></div>
 
     <div class="counts stg">

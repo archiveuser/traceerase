@@ -200,7 +200,7 @@ const rows = $('#rows'), report = $('#report'), go = $('#go'), q = $('#q');
 let n = { found: 0, free: 0, unknown: 0 }, t0 = 0, timer = 0, es = null, foundHits = [], allHits = [];
 let lastScanMeta = null, reportMode = null, noteState = 'hero', lastErrorMessage = '';
 let selectedIntent = 'general', activeIntent = 'general', activeQuery = '', insightsReady = false;
-let completedTasks = new Set(), demoTimers = [], runId = 0;
+let completedTasks = new Set(), demoTimers = [], runId = 0, scanWatchdog = 0, scanDone = 0, scanTotal = 0;
 let scanStartedAt = null, scanFinishedAt = null;
 
 const INTENT_PRIORITY = {
@@ -621,14 +621,22 @@ $('#filters').onclick = e => {
 
 const cancelActiveRun = () => {
   runId++;
-  es?.close(); es = null; clearInterval(timer);
+  es?.close(); es = null; clearInterval(timer); clearTimeout(scanWatchdog);
   demoTimers.forEach(clearTimeout); demoTimers = [];
-  go.disabled = false;
+  go.disabled = false; $('#scan').setAttribute('aria-busy', 'false');
 };
 const stop = currentRun => {
   if (currentRun !== runId) return;
-  es?.close(); es = null; clearInterval(timer);
-  go.disabled = false; go.textContent = t('scan.again');
+  es?.close(); es = null; clearInterval(timer); clearTimeout(scanWatchdog);
+  go.disabled = false; go.textContent = t('scan.again'); $('#scan').setAttribute('aria-busy', 'false');
+};
+const setScanProgress = (done = 0, total = scanTotal) => {
+  scanDone = Math.max(0, Number(done) || 0);
+  scanTotal = Math.max(0, Number(total) || 0);
+  $('#scan-progress').textContent = t('report.progress', { done: scanDone, total: scanTotal });
+};
+const eventData = event => {
+  try { return event?.data ? JSON.parse(event.data) : null; } catch { return null; }
 };
 const resetReport = () => {
   rows.replaceChildren(); rows.classList.add('onlyfound'); rows.dataset.empty = t('report.waiting');
@@ -645,6 +653,7 @@ const resetReport = () => {
   $('#rnote').textContent = ''; $('#cleanup-list').replaceChildren();
   $('#cleanup-progress').textContent = '0/0'; $('#cleanup-progress-bar').style.width = '0%';
   $('#arc').style.strokeDashoffset = 276.5; $('#pct').textContent = '0%';
+  setScanProgress(0, 0);
 };
 
 const renderReportTitle = () => {
@@ -667,44 +676,56 @@ $('#scan').onsubmit = e => {
   if (!val) return;
 
   cancelActiveRun(); const currentRun = runId; let finished = false;
+  const failRun = message => {
+    if (currentRun !== runId || finished) return;
+    noteState = 'error'; lastErrorMessage = message || t('scan.connection'); $('#note').className = 'note err'; renderNote();
+    stop(currentRun);
+  };
   activeIntent = selectedIntent; activeQuery = val;
   reportMode = 'scan'; lastScanMeta = null; resetReport();
   scanStartedAt = new Date();
   noteState = 'running'; $('#note').className = 'note'; renderNote();
-  go.disabled = true; go.textContent = t('scan.running');
+  go.disabled = true; go.textContent = t('scan.running'); $('#scan').setAttribute('aria-busy', 'true');
   report.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  report.focus({ preventScroll: true });
 
   t0 = performance.now();
   timer = setInterval(() => ($('#c-time').textContent = ((performance.now() - t0) / 1000).toFixed(1) + t('time.unit')), 100);
 
   es = new EventSource('/api/scan?q=' + encodeURIComponent(val) + '&lang=' + currentLanguage());
+  scanWatchdog = setTimeout(() => failRun(t('scan.timeout')), 55_000);
 
   es.addEventListener('start', ev => {
     if (currentRun !== runId) return;
-    const d = JSON.parse(ev.data);
+    const d = eventData(ev);
+    if (!d || !Number.isFinite(Number(d.total))) return failRun(t('scan.connection'));
     lastScanMeta = d; graphRoot(activeQuery); renderReportTitle();
+    setScanProgress(0, d.total);
   });
   es.addEventListener('hit', ev => {
     if (currentRun !== runId) return;
-    const h = JSON.parse(ev.data); n[h.state]++; setCounts(); addRow(h);
+    const h = eventData(ev);
+    if (!h || !['found', 'free', 'unknown'].includes(h.state)) return;
+    n[h.state]++; setCounts(); addRow(h);
   });
   es.addEventListener('progress', ev => {
     if (currentRun !== runId) return;
-    const d = JSON.parse(ev.data), p = d.done / d.total;
+    const d = eventData(ev);
+    if (!d || !Number.isFinite(Number(d.done)) || !Number.isFinite(Number(d.total)) || Number(d.total) < 1) return;
+    const p = Math.min(1, Math.max(0, d.done / d.total));
     $('#arc').style.strokeDashoffset = 276.5 * (1 - p);
     $('#pct').textContent = Math.round(p * 100) + '%';
+    setScanProgress(d.done, d.total);
   });
-  es.addEventListener('note', ev => { if (currentRun === runId) $('#rnote').textContent = JSON.parse(ev.data).msg; });
+  es.addEventListener('note', ev => { const d = eventData(ev); if (currentRun === runId && d?.msg) $('#rnote').textContent = d.msg; });
   es.addEventListener('error', ev => {
-    if (currentRun !== runId || finished) return;
-    const msg = ev.data ? JSON.parse(ev.data).msg : t('scan.connection');
-    noteState = 'error'; lastErrorMessage = msg; $('#note').className = 'note err'; renderNote();
-    stop(currentRun);
+    const d = eventData(ev); failRun(d?.msg || t('scan.connection'));
   });
   es.addEventListener('done', () => {
     if (currentRun !== runId) return;
     finished = true; scanFinishedAt = new Date(); stop(currentRun);
     $('#c-time').textContent = ((performance.now() - t0) / 1000).toFixed(1) + t('time.unit');
+    setScanProgress(scanTotal, scanTotal);
     const model = renderCompletion();
     $('#note').className = 'note';
     noteState = model.insufficient ? 'doneUnknown' : n.found ? 'doneFound' : 'doneEmpty'; renderNote();
@@ -936,11 +957,12 @@ $('#demo').onclick = () => {
       { n: 'TikTok', url: 'https://www.tiktok.com/@demo-user', direct: true }
     ]
   };
-  graphRoot(activeQuery); renderReportTitle(); report.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  graphRoot(activeQuery); renderReportTitle(); setScanProgress(0, demoItems.length); report.scrollIntoView({ behavior: 'smooth', block: 'start' }); report.focus({ preventScroll: true });
   demoItems.forEach((h, i) => demoTimers.push(setTimeout(() => {
     if (currentRun !== runId) return;
     n[h.state]++; setCounts(); addRow(h); const progress = (i + 1) / demoItems.length;
     $('#arc').style.strokeDashoffset = 276.5 * (1 - progress); $('#pct').textContent = Math.round(progress * 100) + '%';
+    setScanProgress(i + 1, demoItems.length);
     if (i === demoItems.length - 1) { scanFinishedAt = new Date(); $('#c-time').textContent = '2.1' + t('time.unit'); renderCompletion(); $('#rnote').textContent = t('demo.note'); }
   }, i * 330)));
 };
@@ -953,6 +975,7 @@ document.addEventListener('traceerase:languagechange', () => {
   refreshGraph();
   renderReportTitle();
   renderNote();
+  setScanProgress(scanDone, scanTotal);
   go.textContent = es ? t('scan.running') : report.hidden ? t('hero.cta') : t('scan.again');
   $$('.row .cat[data-cat]').forEach(element => { element.textContent = CAT[element.dataset.cat]; });
   $$('.row .st[data-state]').forEach(element => { element.textContent = ST[element.dataset.state]; });
